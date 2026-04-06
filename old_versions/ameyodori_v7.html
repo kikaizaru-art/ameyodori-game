@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>雨宿りの回廊 v7</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0a0a18; overflow:hidden; font-family:'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif; }
+#game-container { position:relative; margin:0 auto; }
+
+/* Subtle CSS vignette on game-container only (very light, aesthetic only) */
+/* Vignette removed — caused masking issues */
+
+/* ===== Minimal HUD ===== */
+#warning-text { position:absolute; bottom:60px; left:50%; transform:translateX(-50%); font-size:13px; z-index:20; pointer-events:none; white-space:nowrap; font-weight:200; letter-spacing:3px; }
+#stage-indicator { position:absolute; top:10px; left:50%; transform:translateX(-50%); font-size:11px; color:rgba(120,115,130,0.4); z-index:20; pointer-events:none; white-space:nowrap; font-weight:200; letter-spacing:2px; }
+#fear-gauge { position:absolute; top:12px; right:12px; width:60px; height:3px; border:none; border-radius:2px; z-index:20; overflow:hidden; background:rgba(255,255,255,0.06); }
+#fear-fill { width:0%; height:100%; background:linear-gradient(90deg, rgba(140,100,180,0.6), rgba(200,60,80,0.8)); transition:width 0.15s; border-radius:2px; }
+#hand-hint { position:absolute; bottom:40px; left:50%; transform:translateX(-50%); font-size:12px; color:rgba(255,220,160,0.7); z-index:20; pointer-events:none; font-weight:300; letter-spacing:1px; }
+#match-hud { position:absolute; top:10px; left:12px; font-size:12px; color:rgba(255,180,80,0.8); z-index:20; pointer-events:none; display:none; cursor:pointer; font-weight:300; }
+#goal-hint { position:absolute; top:30px; left:50%; transform:translateX(-50%); font-size:12px; color:rgba(220,200,140,0.8); z-index:20; pointer-events:none; display:none; font-weight:300; }
+
+/* ===== Start Screen — Dark Minimalist ===== */
+#start-screen {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  background:linear-gradient(180deg, #12122a 0%, #1e1e3a 50%, #12122a 100%); z-index:100;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:20px 10px; overflow-y:auto;
+}
+/* CSS rain for start screen (no canvas) */
+.start-rain-drop {
+  position:absolute; top:-20px; width:1px; background:rgba(140,160,200,0.15);
+  animation: startRainFall linear infinite;
+}
+@keyframes startRainFall {
+  0% { transform: translateY(0) translateX(0); opacity:0.15; }
+  100% { transform: translateY(100vh) translateX(-20px); opacity:0; }
+}
+#start-screen h1 {
+  font-size:28px; color:#ccbb88; font-weight:300;
+  letter-spacing:8px; margin-bottom:8px; z-index:1;
+  text-shadow: 0 0 30px rgba(200,180,120,0.3);
+}
+#start-screen .sub {
+  font-size:12px; color:rgba(180,160,130,0.6); margin-bottom:40px;
+  letter-spacing:4px; font-weight:200; z-index:1;
+}
+#start-screen .btn {
+  padding:14px 48px; font-size:16px; color:#ccbb88;
+  background:rgba(40,35,25,0.6); border:1px solid rgba(200,180,130,0.4);
+  border-radius:6px; cursor:pointer; letter-spacing:4px; font-weight:300;
+  transition: all 0.3s ease; z-index:1; font-family:inherit;
+}
+#start-screen .btn:hover {
+  color:#eeddaa; border-color:rgba(220,200,160,0.7);
+  background:rgba(60,50,35,0.8);
+  text-shadow:0 0 15px rgba(220,200,160,0.4);
+}
+#start-screen .controls {
+  font-size:11px; color:rgba(160,150,170,0.5); margin-top:25px;
+  line-height:2; text-align:center; font-weight:300; letter-spacing:1px; z-index:1;
+}
+#start-silhouettes {
+  position:absolute; bottom:60px; left:50%; transform:translateX(-50%);
+  width:40px; height:30px; opacity:0.15; z-index:1;
+}
+
+/* ===== Clear Screen ===== */
+#clear-screen {
+  position:absolute; top:0; left:0; width:100%; height:100%; z-index:100;
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at center, rgba(40,35,20,0.95) 0%, rgba(0,0,0,0.98) 100%);
+}
+#clear-screen h2 { font-size:22px; color:#bbaa77; margin-bottom:12px; letter-spacing:4px; font-weight:300; }
+#clear-screen p { font-size:13px; color:rgba(180,170,140,0.7); margin-bottom:25px; font-weight:300; }
+#clear-screen .btn {
+  padding:12px 36px; font-size:14px; color:#ccbb88;
+  background:rgba(40,35,25,0.5); border:1px solid rgba(200,180,130,0.4);
+  border-radius:6px; cursor:pointer; letter-spacing:3px; font-weight:300; transition:all 0.3s; font-family:inherit;
+}
+#clear-screen .btn:hover { color:#eeddaa; border-color:rgba(220,200,150,0.6); background:rgba(60,50,35,0.7); }
+
+/* ===== Game Over ===== */
+#gameover-screen {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.98); z-index:100;
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+}
+#gameover-eyes {
+  position:relative; width:60px; height:20px; margin-bottom:30px;
+}
+#gameover-eyes .eye {
+  position:absolute; width:8px; height:8px; border-radius:50%;
+  background:radial-gradient(circle, #ff2222 30%, #880000 70%, transparent 100%);
+  box-shadow:0 0 15px rgba(255,0,0,0.6), 0 0 30px rgba(255,0,0,0.3);
+  animation: eyePulse 2s ease-in-out infinite;
+}
+#gameover-eyes .eye:first-child { left:10px; top:6px; }
+#gameover-eyes .eye:last-child { right:10px; top:6px; }
+@keyframes eyePulse { 0%,100%{opacity:0.7;transform:scale(1)} 50%{opacity:1;transform:scale(1.2)} }
+#gameover-screen h2 { font-size:22px; color:#cc4444; margin-bottom:10px; letter-spacing:4px; font-weight:300; }
+#gameover-screen p { font-size:13px; color:rgba(180,100,100,0.7); margin-bottom:25px; font-weight:300; }
+#gameover-screen .btn {
+  padding:12px 36px; font-size:14px; color:#cc8888;
+  background:rgba(60,20,20,0.5); border:1px solid rgba(200,80,80,0.4);
+  border-radius:6px; cursor:pointer; letter-spacing:3px; font-weight:300; transition:all 0.3s; font-family:inherit;
+}
+#gameover-screen .btn:hover { color:#ffaaaa; border-color:rgba(220,100,100,0.6); background:rgba(80,30,30,0.7); }
+
+/* ===== Ending ===== */
+#ending-screen {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  background:radial-gradient(ellipse at center bottom, rgba(60,50,30,0.9) 0%, rgba(0,0,0,0.98) 70%);
+  z-index:100; display:none; flex-direction:column; align-items:center; justify-content:center;
+}
+#ending-screen h2 { font-size:24px; color:#ccbb88; margin-bottom:12px; letter-spacing:5px; font-weight:300; }
+#ending-screen p { font-size:14px; color:rgba(200,180,140,0.8); margin-bottom:6px; line-height:2; font-weight:300; }
+#ending-screen .btn {
+  padding:12px 36px; font-size:14px; color:#ccbb88;
+  background:rgba(40,35,25,0.5); border:1px solid rgba(200,180,130,0.4);
+  border-radius:6px; cursor:pointer; letter-spacing:3px; font-weight:300; margin-top:25px; transition:all 0.3s; font-family:inherit;
+}
+#ending-screen .btn:hover { color:#eeddaa; border-color:rgba(220,200,150,0.6); background:rgba(60,50,35,0.7); }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="warning-text"></div>
+  <div id="stage-indicator"></div>
+  <div id="fear-gauge"><div id="fear-fill"></div></div>
+  <div id="hand-hint"></div>
+  <div id="match-hud" onclick="useMatch()"></div>
+  <div id="goal-hint"></div>
+  <div id="start-screen">
+    <h1>雨宿りの回廊</h1>
+    <div class="sub">あめやどりのかいろう</div>
+    <div class="btn" onclick="startGame()">はじめる</div>
+    <div class="controls">
+      WASD / 矢印 / タッチ　　　E / タップ: 手つなぎ　　　F: マッチ
+    </div>
+    <canvas id="start-silhouettes"></canvas>
+  </div>
+  <div id="clear-screen">
+    <h2>─ 安全地帯に到達 ─</h2>
+    <p>姉弟は光の中へたどり着いた...</p>
+    <div class="btn" onclick="nextStage()">次のステージへ</div>
+  </div>
+  <div id="gameover-screen">
+    <div id="gameover-eyes"><div class="eye"></div><div class="eye"></div></div>
+    <h2>影に飲まれた</h2>
+    <p>暗闇が二人を包み込んだ...</p>
+    <div class="btn" onclick="retryStage()">もう一度</div>
+  </div>
+  <div id="ending-screen">
+    <h2>─ 雨が止んだ ─</h2>
+    <p>長い夜が終わり、空が白み始める。</p>
+    <p>姉弟は手をつないだまま、光の中へ歩き出した。</p>
+    <div class="btn" onclick="backToTitle()">タイトルへ</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<script>
+// ============================================
+// CONFIG — 全定数・バランス値
+// ============================================
+const W = Math.min(800, window.innerWidth);
+const H = Math.min(600, window.innerHeight - 20);
+const TILE = 32;
+const COLS = Math.floor(W / TILE);
+const ROWS = Math.floor(H / TILE);
+
+const CONFIG = {
+  SISTER_SPEED: 150,
+  BROTHER_SPEED_LIT: 110,
+  BROTHER_SPEED_DARK: 50,
+  BROTHER_SPEED_HOLDING: 135,
+  HAND_REACH: 50,
+  HAND_BREAK: 80,
+  FEAR_RATE_LIT: -15,
+  FEAR_RATE_DARK: 12,
+  FEAR_ENEMY_MAX: 25,
+  FEAR_ENEMY_RANGE: 200,
+  FEAR_HOLDING_BONUS: -10,
+  FEAR_FREEZE_THRESHOLD: 100,
+  FEAR_UNFREEZE_THRESHOLD: 60,
+  ENEMY_SPEED_FAR: 38,
+  ENEMY_SPEED_NEAR: 28,
+  ENEMY_SPEED_THRESHOLD: 200,
+  ENEMY_KILL_DIST: 30,
+  ENEMY_LIGHT_REPEL_THRESHOLD: 0.3,
+  ENEMY_LIGHT_REPEL_STRENGTH: 80,
+  STREETLIGHT_RADIUS: 70,
+  MIRROR_RADIUS: 60,
+  MIRROR_ACTIVATE_DIST: 120,
+  GOAL_LIGHT_RADIUS: 60,
+  ENEMY_WARNING_CLOSE: 100,
+  ENEMY_WARNING_MID: 180,
+  ENEMY_WARNING_FAR: 260,
+  // v7: Darkness is now a Phaser rectangle, much lower alpha
+  DARKNESS_BASE: 0.18,
+  DARKNESS_ENEMY_BONUS: 0.12,
+  RAIN_COUNT: 120,
+  RAIN_SPEED_Y: 280,
+  RAIN_WIND_X: -60,
+  BOX_PUSH_SPEED: 100,
+  BREAKLIGHT_LIFETIME: 15,
+  BREAKLIGHT_WARN_TIME: 5,
+  MATCH_LIGHT_RADIUS: 50,
+  MATCH_DURATION: 8,
+  MATCH_FADE_TIME: 2,
+  HIDDEN_SHIMMER_SPEED: 3,
+};
+
+const TILE_FLOOR = 0;
+const TILE_WALL = 1;
+const TILE_STREETLIGHT = 2;
+const TILE_MIRROR = 3;
+const TILE_SHOP = 4;
+const TILE_GOAL = 5;
+const TILE_PUSHBOX = 6;
+const TILE_BREAKLIGHT = 7;
+const TILE_SWITCH = 8;
+const TILE_DOOR = 9;
+const TILE_MATCH = 10;
+const TILE_HIDDEN = 11;
+
+const STAGE2_OVERRIDES = {
+  STREETLIGHT_RADIUS: 45,
+  MIRROR_RADIUS: 40,
+  ENEMY_SPEED_FAR: 40,
+  ENEMY_SPEED_NEAR: 30,
+  DARKNESS_BASE: 0.30,
+  RAIN_COUNT: 200,
+  RAIN_WIND_X: -100,
+};
+
+const STAGE3_OVERRIDES = {
+  STREETLIGHT_RADIUS: 55,
+  MIRROR_RADIUS: 50,
+  ENEMY_SPEED_FAR: 42,
+  ENEMY_SPEED_NEAR: 32,
+  DARKNESS_BASE: 0.28,
+  RAIN_COUNT: 100,
+  RAIN_WIND_X: -40,
+  LIGHTNING_INTERVAL_MIN: 6000,
+  LIGHTNING_INTERVAL_MAX: 12000,
+  LIGHTNING_FLASH_DURATION: 500,
+  LIGHTNING_DARK_DURATION: 2000,
+};
+
+// ============================================
+// GAME STATE
+// ============================================
+let game = null;
+let currentStage = 1;
+const TOTAL_STAGES = 3;
+
+const STAGE_NAMES = {
+  1: 'Stage 1 ─ 商店街',
+  2: 'Stage 2 ─ 台風接近',
+  3: 'Stage 3 ─ 雷鳴',
+};
+
+// ============================================
+// TITLE SCREEN — CSS RAIN (no canvas)
+// ============================================
+function initStartRain() {
+  const screen = document.getElementById('start-screen');
+  // Remove old CSS rain drops
+  screen.querySelectorAll('.start-rain-drop').forEach(d => d.remove());
+  // Create simple CSS div rain drops
+  for (let i = 0; i < 60; i++) {
+    const drop = document.createElement('div');
+    drop.className = 'start-rain-drop';
+    drop.style.left = Math.random() * 100 + '%';
+    drop.style.height = (8 + Math.random() * 16) + 'px';
+    drop.style.animationDuration = (1.5 + Math.random() * 2) + 's';
+    drop.style.animationDelay = (Math.random() * 3) + 's';
+    screen.appendChild(drop);
+  }
+
+  // Draw silhouettes
+  const sil = document.getElementById('start-silhouettes');
+  if (sil) {
+    sil.width = 40; sil.height = 30;
+    const sc = sil.getContext('2d');
+    sc.fillStyle = 'rgba(200,160,100,0.5)';
+    sc.beginPath(); sc.arc(14, 10, 4, 0, Math.PI*2); sc.fill();
+    sc.fillRect(12, 14, 4, 10);
+    sc.fillStyle = 'rgba(100,150,220,0.4)';
+    sc.beginPath(); sc.arc(26, 13, 3, 0, Math.PI*2); sc.fill();
+    sc.fillRect(24, 16, 4, 8);
+    sc.strokeStyle = 'rgba(220,200,140,0.2)';
+    sc.lineWidth = 0.5;
+    sc.beginPath(); sc.moveTo(16, 20); sc.lineTo(24, 20); sc.stroke();
+  }
+}
+
+// ============================================
+// MAP GENERATION
+// ============================================
+
+function generateStage1() {
+  const map = [];
+  for (let r = 0; r < ROWS; r++) {
+    map[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      if (r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1) {
+        if (r === 0) {
+          const midC = Math.floor(COLS / 2);
+          map[r][c] = (c >= midC - 1 && c <= midC + 1) ? TILE_GOAL : TILE_WALL;
+        } else {
+          map[r][c] = TILE_WALL;
+        }
+      }
+      else if (r === 3 && c > 2 && c < COLS - 3 && c % 4 === 0) map[r][c] = TILE_SHOP;
+      else if (r === 4 && c > 2 && c < COLS - 3 && c % 4 !== 2) map[r][c] = TILE_SHOP;
+      else if (r === ROWS - 5 && c > 2 && c < COLS - 3 && c % 4 === 0) map[r][c] = TILE_SHOP;
+      else if (r === ROWS - 4 && c > 2 && c < COLS - 3 && c % 4 !== 2) map[r][c] = TILE_SHOP;
+      else if ((r === 7 || r === 10) && c % 5 === 3 && c > 1 && c < COLS - 2) map[r][c] = TILE_STREETLIGHT;
+      else if (r === 8 && (c === 6 || c === 14)) map[r][c] = TILE_MIRROR;
+      else if (r === 9 && (c === 10 || c === 12)) map[r][c] = TILE_PUSHBOX;
+      else if (r === 6 && c === 8) map[r][c] = TILE_MATCH;
+      else map[r][c] = TILE_FLOOR;
+    }
+  }
+  return map;
+}
+
+function getStage1Positions() {
+  return {
+    sister: { x: Math.floor(COLS / 2) * TILE, y: (ROWS - 3) * TILE },
+    brother: { x: Math.floor(COLS / 2) * TILE + TILE, y: (ROWS - 3) * TILE },
+    enemies: [{ x: (COLS - 4) * TILE, y: 4 * TILE }],
+    switchDoors: [],
+  };
+}
+
+function generateStage2() {
+  const map = [];
+  for (let r = 0; r < ROWS; r++) {
+    map[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      if (r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1) {
+        if (r === 0) {
+          const midC = Math.floor(COLS / 2);
+          map[r][c] = (c >= midC - 1 && c <= midC + 1) ? TILE_GOAL : TILE_WALL;
+        } else {
+          map[r][c] = TILE_WALL;
+        }
+      }
+      else if (r === Math.floor(ROWS / 2)) {
+        const gaps = [4, Math.floor(COLS / 2), COLS - 5];
+        map[r][c] = gaps.includes(c) ? TILE_FLOOR : TILE_WALL;
+      }
+      else if (r === 5 && (c === 5 || c === COLS - 6)) map[r][c] = TILE_STREETLIGHT;
+      else if (r === 4 && c === Math.floor(COLS / 2)) map[r][c] = TILE_BREAKLIGHT;
+      else if (r === ROWS - 4 && (c === 6 || c === COLS - 7)) map[r][c] = TILE_BREAKLIGHT;
+      else if (r === 7 && c === 10) map[r][c] = TILE_MIRROR;
+      else if (r === ROWS - 3 && c === Math.floor(COLS / 2)) map[r][c] = TILE_MIRROR;
+      else if (r === Math.floor(ROWS / 2) - 2 && c === COLS - 4) map[r][c] = TILE_SWITCH;
+      else if (r === Math.floor(ROWS / 2) && c === COLS - 4) map[r][c] = TILE_DOOR;
+      else if (r === ROWS - 5 && c === 3) map[r][c] = TILE_MATCH;
+      else if (r === 3 && c > 1 && c < COLS - 2 && c % 5 === 0) map[r][c] = TILE_SHOP;
+      else map[r][c] = TILE_FLOOR;
+    }
+  }
+  return map;
+}
+
+function getStage2Positions() {
+  return {
+    sister: { x: Math.floor(COLS / 2) * TILE, y: (ROWS - 3) * TILE },
+    brother: { x: Math.floor(COLS / 2) * TILE + TILE, y: (ROWS - 3) * TILE },
+    enemies: [
+      { x: 3 * TILE, y: 3 * TILE },
+      { x: (COLS - 4) * TILE, y: 3 * TILE },
+    ],
+    switchDoors: [
+      { switchId: 'A', switchPos: { r: Math.floor(ROWS / 2) - 2, c: COLS - 4 }, doorPos: { r: Math.floor(ROWS / 2), c: COLS - 4 } },
+    ],
+  };
+}
+
+function generateStage3() {
+  const map = [];
+  for (let r = 0; r < ROWS; r++) {
+    map[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      if (r === 0) {
+        const midC = Math.floor(COLS / 2);
+        map[r][c] = (c >= midC - 1 && c <= midC + 1) ? TILE_GOAL : TILE_WALL;
+      } else if (r === ROWS - 1 || c === 0 || c === COLS - 1) {
+        map[r][c] = TILE_WALL;
+      } else {
+        map[r][c] = TILE_FLOOR;
+      }
+    }
+  }
+
+  const hWalls = [
+    { row: 4, gapCols: [3, Math.floor(COLS/2), COLS-4] },
+    { row: 8, gapCols: [5, Math.floor(COLS/2)-2, COLS-6] },
+    { row: 12, gapCols: [4, Math.floor(COLS/2)+1, COLS-5] },
+  ];
+  hWalls.forEach(hw => {
+    if (hw.row < ROWS - 1) {
+      for (let c = 1; c < COLS - 1; c++) {
+        if (!hw.gapCols.includes(c) && map[hw.row][c] === TILE_FLOOR) {
+          map[hw.row][c] = TILE_WALL;
+        }
+      }
+    }
+  });
+
+  const vWalls = [
+    { col: 4, fromRow: 1, toRow: 3 },
+    { col: 8, fromRow: 5, toRow: 7 },
+    { col: COLS - 5, fromRow: 1, toRow: 3 },
+    { col: COLS - 9, fromRow: 9, toRow: 11 },
+    { col: 3, fromRow: 9, toRow: 11 },
+    { col: Math.floor(COLS/2), fromRow: 5, toRow: 7 },
+  ];
+  vWalls.forEach(vw => {
+    for (let r = vw.fromRow; r <= vw.toRow && r < ROWS - 1; r++) {
+      if (map[r][vw.col] === TILE_FLOOR) map[r][vw.col] = TILE_WALL;
+    }
+  });
+
+  if (6 < ROWS - 1) map[6][6] = TILE_STREETLIGHT;
+  if (10 < ROWS - 1) map[10][COLS - 7] = TILE_STREETLIGHT;
+
+  if (3 < ROWS - 1) map[3][Math.floor(COLS / 2)] = TILE_BREAKLIGHT;
+  if (7 < ROWS - 1) map[7][COLS - 4] = TILE_BREAKLIGHT;
+  if (11 < ROWS - 1) map[11][4] = TILE_BREAKLIGHT;
+
+  if (5 < ROWS - 1) map[5][3] = TILE_MIRROR;
+  if (9 < ROWS - 1) map[9][COLS - 4] = TILE_MIRROR;
+
+  if (6 < ROWS - 1) map[6][10] = TILE_PUSHBOX;
+  if (10 < ROWS - 1) map[10][5] = TILE_PUSHBOX;
+  if (3 < ROWS - 1 && 7 < COLS - 1) map[3][7] = TILE_PUSHBOX;
+
+  if (2 < ROWS - 1) map[2][2] = TILE_MATCH;
+  if (ROWS - 3 > 0) map[ROWS - 3][COLS - 3] = TILE_MATCH;
+
+  if (ROWS - 4 > 0) map[ROWS - 4][8] = TILE_SWITCH;
+  map[8][5] = TILE_DOOR;
+
+  if (6 < ROWS - 1) map[6][COLS - 3] = TILE_SWITCH;
+  map[4][COLS - 4] = TILE_DOOR;
+
+  map[4][3] = TILE_HIDDEN;
+  map[8][COLS - 4] = TILE_HIDDEN;
+
+  return map;
+}
+
+function getStage3Positions() {
+  return {
+    sister: { x: Math.floor(COLS / 2) * TILE, y: (ROWS - 3) * TILE },
+    brother: { x: Math.floor(COLS / 2) * TILE + TILE, y: (ROWS - 3) * TILE },
+    enemies: [
+      { x: 3 * TILE, y: 3 * TILE },
+      { x: (COLS - 4) * TILE, y: 6 * TILE },
+    ],
+    switchDoors: [
+      { switchId: 'A', switchPos: { r: ROWS - 4, c: 8 }, doorPos: { r: 8, c: 5 } },
+      { switchId: 'B', switchPos: { r: 6, c: COLS - 3 }, doorPos: { r: 4, c: COLS - 4 } },
+    ],
+  };
+}
+
+// ============================================
+// TEXTURE GENERATION — v7: Brighter, more distinct
+// ============================================
+function generateTextures(scene) {
+  const g = scene.make.graphics({ x: 0, y: 0, add: false });
+  const T = TILE;
+
+  // ===================== MAP TILES =====================
+
+  // Floor — dark blue-purple with subtle grid lines
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  // Subtle grid lines for spatial awareness
+  g.fillStyle(0x252540, 0.6);
+  g.fillRect(T-1, 0, 1, T); // right edge
+  g.fillRect(0, T-1, T, 1); // bottom edge
+  g.generateTexture('floor', T, T);
+
+  // Wall — clearly lighter than floor with bright outline
+  g.clear();
+  g.fillStyle(0x3a3a55);
+  g.fillRect(0, 0, T, T);
+  // Inner slightly different shade
+  g.fillStyle(0x353050);
+  g.fillRect(2, 2, T-4, T-4);
+  // Bright 1px outline
+  g.fillStyle(0x556688);
+  g.fillRect(0, 0, T, 1); // top
+  g.fillRect(0, T-1, T, 1); // bottom
+  g.fillRect(0, 0, 1, T); // left
+  g.fillRect(T-1, 0, 1, T); // right
+  g.generateTexture('wall', T, T);
+
+  // Shop — wall variant with faint neon glow
+  g.clear();
+  g.fillStyle(0x352842);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x302540);
+  g.fillRect(2, 2, T-4, T-4);
+  // Neon glow on top edge
+  g.fillStyle(0x7a3a5a, 0.6);
+  g.fillRect(2, 0, T-4, 2);
+  g.fillStyle(0x9a4070, 0.3);
+  g.fillRect(4, 0, T-8, 1);
+  // Edge outlines
+  g.fillStyle(0x556688, 0.5);
+  g.fillRect(0, 0, 1, T);
+  g.fillRect(T-1, 0, 1, T);
+  g.fillRect(0, T-1, T, 1);
+  g.generateTexture('shop', T, T);
+
+  // ===================== LIGHT SOURCES =====================
+
+  // Streetlight — thin pole with warm light dot
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  // Grid lines
+  g.fillStyle(0x252540, 0.6);
+  g.fillRect(T-1, 0, 1, T);
+  g.fillRect(0, T-1, T, 1);
+  // Pole
+  g.fillStyle(0x445566, 0.8);
+  g.fillRect(15, 10, 2, 20);
+  // Warm light dot at top
+  for (let i = 8; i > 0; i--) {
+    g.fillStyle(0xffddaa, (1 - i/8) * 0.8);
+    g.fillCircle(16, 6, i);
+  }
+  g.generateTexture('streetlight', T, T);
+
+  // Breakable streetlight — orange-red tinted
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x252540, 0.6);
+  g.fillRect(T-1, 0, 1, T);
+  g.fillRect(0, T-1, T, 1);
+  g.fillStyle(0x445566, 0.7);
+  g.fillRect(15, 10, 2, 20);
+  for (let i = 7; i > 0; i--) {
+    g.fillStyle(0xff8844, (1 - i/7) * 0.7);
+    g.fillCircle(16, 6, i);
+  }
+  g.lineStyle(1, 0x664422, 0.4);
+  g.lineBetween(13, 4, 19, 8);
+  g.generateTexture('breaklight', T, T);
+
+  // Dead breakable streetlight
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x252540, 0.6);
+  g.fillRect(T-1, 0, 1, T);
+  g.fillRect(0, T-1, T, 1);
+  g.fillStyle(0x333344, 0.5);
+  g.fillRect(15, 10, 2, 20);
+  g.fillStyle(0x2a2a3a, 0.4);
+  g.fillCircle(16, 6, 3);
+  g.generateTexture('breaklight_dead', T, T);
+
+  // Mirror — cool cyan glow
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x252540, 0.6);
+  g.fillRect(T-1, 0, 1, T);
+  g.fillRect(0, T-1, T, 1);
+  g.fillStyle(0x2a3040, 0.7);
+  g.fillCircle(16, 16, 12);
+  for (let i = 10; i > 0; i--) {
+    g.fillStyle(0x44aacc, (1 - i/10) * 0.6);
+    g.fillCircle(16, 16, i);
+  }
+  g.lineStyle(1, 0x66ccee, 0.5);
+  g.strokeCircle(16, 16, 10);
+  g.fillStyle(0xccffff, 0.6);
+  g.fillCircle(13, 13, 2);
+  g.generateTexture('mirror', T, T);
+
+  // Goal tile — bright warm beacon
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  for (let i = 14; i > 0; i--) {
+    g.fillStyle(0xeedd88, (1 - i/14) * 0.7);
+    g.fillCircle(16, 16, i);
+  }
+  g.fillStyle(0xffffcc, 0.9);
+  g.fillCircle(16, 16, 5);
+  g.fillStyle(0xffffff, 0.7);
+  g.fillCircle(16, 16, 3);
+  g.generateTexture('goal', T, T);
+
+  // Goal glow — LARGE warm radial for above darkness
+  g.clear();
+  for (let i = 64; i > 0; i--) {
+    g.fillStyle(0xeedd88, (1 - i/64) * 0.7);
+    g.fillCircle(80, 80, (i/64) * 80);
+  }
+  g.generateTexture('goalglow', 160, 160);
+
+  // ===================== GIMMICKS =====================
+
+  // Pushbox
+  g.clear();
+  g.fillStyle(0x282838);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x303042);
+  g.fillRect(2, 2, T-4, T-4);
+  g.lineStyle(1, 0x667788, 0.3);
+  g.strokeRect(1, 1, T-2, T-2);
+  g.fillStyle(0x889999, 0.25);
+  g.fillTriangle(16, 5, 12, 10, 20, 10);
+  g.fillTriangle(16, 27, 12, 22, 20, 22);
+  g.fillTriangle(5, 16, 10, 12, 10, 20);
+  g.fillTriangle(27, 16, 22, 12, 22, 20);
+  g.generateTexture('pushbox', T, T);
+
+  // Switch OFF
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x252540, 0.6);
+  g.fillRect(T-1, 0, 1, T);
+  g.fillRect(0, T-1, T, 1);
+  for (let i = 8; i > 0; i--) {
+    g.fillStyle(0xcc2222, (1 - i/8) * 0.5);
+    g.fillCircle(T/2, T/2, i);
+  }
+  g.fillStyle(0xff3333, 0.9);
+  g.fillCircle(T/2, T/2, 3);
+  g.generateTexture('switch_off', T, T);
+
+  // Switch ON
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x252540, 0.6);
+  g.fillRect(T-1, 0, 1, T);
+  g.fillRect(0, T-1, T, 1);
+  for (let i = 10; i > 0; i--) {
+    g.fillStyle(0x22cc44, (1 - i/10) * 0.5);
+    g.fillCircle(T/2, T/2, i);
+  }
+  g.fillStyle(0x44ff66, 0.9);
+  g.fillCircle(T/2, T/2, 3);
+  g.generateTexture('switch_on', T, T);
+
+  // Door
+  g.clear();
+  g.fillStyle(0x141428);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x2a2a44, 0.7);
+  for (let x = 4; x < T; x += 4) {
+    g.fillRect(x, 0, 1, T);
+  }
+  g.fillStyle(0x2a2a44, 0.5);
+  g.fillRect(0, T/2-1, T, 2);
+  g.fillStyle(0x4455aa, 0.15);
+  g.fillRect(0, 0, T, 2);
+  g.fillRect(0, T-2, T, 2);
+  g.generateTexture('door', T, T);
+
+  // Match item
+  g.clear();
+  g.fillStyle(0x1a1a2e);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x252540, 0.6);
+  g.fillRect(T-1, 0, 1, T);
+  g.fillRect(0, T-1, T, 1);
+  for (let i = 10; i > 0; i--) {
+    g.fillStyle(0xff8822, (1 - i/10) * 0.4);
+    g.fillCircle(T/2, T/2, i);
+  }
+  g.fillStyle(0xff6600, 0.8);
+  g.fillCircle(T/2, T/2, 3);
+  g.fillStyle(0xffaa44, 0.6);
+  g.fillCircle(T/2, T/2, 1.5);
+  g.generateTexture('match_item', T, T);
+
+  // Hidden wall
+  g.clear();
+  g.fillStyle(0x3a3a55);
+  g.fillRect(0, 0, T, T);
+  g.fillStyle(0x353050);
+  g.fillRect(2, 2, T-4, T-4);
+  g.fillStyle(0x556688);
+  g.fillRect(0, 0, T, 1);
+  g.fillRect(0, T-1, T, 1);
+  g.fillRect(0, 0, 1, T);
+  g.fillRect(T-1, 0, 1, T);
+  g.generateTexture('hidden_wall', T, T);
+
+  // Hidden passage revealed
+  g.clear();
+  g.fillStyle(0x1e1e34);
+  g.fillRect(0, 0, T, T);
+  g.lineStyle(1, 0x6688cc, 0.4);
+  g.strokeRect(2, 2, T-4, T-4);
+  g.fillStyle(0x88aaff, 0.5);
+  g.fillCircle(4, 4, 2);
+  g.fillCircle(T-4, 4, 2);
+  g.fillCircle(4, T-4, 2);
+  g.fillCircle(T-4, T-4, 2);
+  g.generateTexture('hidden_revealed', T, T);
+
+  // ===================== CHARACTERS =====================
+
+  // Sister — bright warm orb with LARGE glow halo
+  g.clear();
+  // Large glow halo extending well beyond sprite
+  for (let i = 15; i > 0; i--) {
+    g.fillStyle(0xff8833, (1 - i/15) * 0.5);
+    g.fillCircle(16, 16, i);
+  }
+  // Core orb — bright #ffcc66
+  g.fillStyle(0xffcc66, 0.95);
+  g.fillCircle(16, 16, 7);
+  g.fillStyle(0xffddaa, 0.8);
+  g.fillCircle(16, 16, 5);
+  g.fillStyle(0xffeedd, 0.6);
+  g.fillCircle(16, 16, 3);
+  // Tiny silhouette
+  g.fillStyle(0x553311, 0.4);
+  g.fillCircle(16, 14, 2.5);
+  g.fillRect(14, 16, 4, 5);
+  g.generateTexture('sister', T, T);
+
+  // Sister glow halo — large, separate texture for ADD blend above darkness
+  g.clear();
+  for (let i = 48; i > 0; i--) {
+    g.fillStyle(0xff8833, (1 - i/48) * 0.55);
+    g.fillCircle(48, 48, i);
+  }
+  // Hot center
+  g.fillStyle(0xffcc66, 0.7);
+  g.fillCircle(48, 48, 8);
+  g.generateTexture('sister_glow', 96, 96);
+
+  // Brother — bright cool orb with glow halo
+  g.clear();
+  for (let i = 13; i > 0; i--) {
+    g.fillStyle(0x3388cc, (1 - i/13) * 0.45);
+    g.fillCircle(16, 16, i);
+  }
+  // Core orb — #66bbff
+  g.fillStyle(0x66bbff, 0.9);
+  g.fillCircle(16, 16, 6);
+  g.fillStyle(0x88ddff, 0.7);
+  g.fillCircle(16, 16, 4);
+  g.fillStyle(0xbbeeFF, 0.5);
+  g.fillCircle(16, 16, 2);
+  // Tiny silhouette
+  g.fillStyle(0x112244, 0.35);
+  g.fillCircle(16, 15, 2);
+  g.fillRect(15, 17, 3, 4);
+  g.generateTexture('brother', T, T);
+
+  // Brother glow halo
+  g.clear();
+  for (let i = 40; i > 0; i--) {
+    g.fillStyle(0x3388cc, (1 - i/40) * 0.5);
+    g.fillCircle(40, 40, i);
+  }
+  g.fillStyle(0x66bbff, 0.6);
+  g.fillCircle(40, 40, 6);
+  g.generateTexture('brother_glow', 80, 80);
+
+  // ===================== ENEMY (64x64) =====================
+
+  const ES = 64;
+  g.clear();
+  // Dark smoke cloud
+  for (let i = 30; i > 0; i--) {
+    g.fillStyle(0x020005, (1 - i/30) * 0.6);
+    g.fillCircle(ES/2, ES/2, (i/30) * (ES/2));
+  }
+  // Tendril extensions
+  g.fillStyle(0x030008, 0.5);
+  g.fillCircle(ES/2 - 14, ES/2 + 12, 8);
+  g.fillCircle(ES/2 + 14, ES/2 + 12, 8);
+  g.fillCircle(ES/2 - 8, ES/2 - 14, 6);
+  g.fillCircle(ES/2 + 8, ES/2 - 14, 6);
+  g.fillCircle(ES/2 - 18, ES/2, 5);
+  g.fillCircle(ES/2 + 18, ES/2, 5);
+  // Dark center mass
+  g.fillStyle(0x010003, 0.9);
+  g.fillCircle(ES/2, ES/2, 16);
+  g.fillCircle(ES/2, ES/2 - 8, 12);
+  // Bright red eyes
+  for (let i = 7; i > 0; i--) {
+    g.fillStyle(0xff0000, (1 - i/7) * 0.7);
+    g.fillCircle(ES/2 - 6, ES/2 - 10, i);
+    g.fillCircle(ES/2 + 6, ES/2 - 10, i);
+  }
+  g.fillStyle(0xff2222, 1.0);
+  g.fillCircle(ES/2 - 6, ES/2 - 10, 2.5);
+  g.fillCircle(ES/2 + 6, ES/2 - 10, 2.5);
+  g.fillStyle(0xff8866, 0.8);
+  g.fillCircle(ES/2 - 6, ES/2 - 10, 1);
+  g.fillCircle(ES/2 + 6, ES/2 - 10, 1);
+  g.generateTexture('shadow_enemy', ES, ES);
+
+  // Enemy red glow halo
+  g.clear();
+  for (let i = 40; i > 0; i--) {
+    g.fillStyle(0xff1111, (1 - i/40) * 0.4);
+    g.fillCircle(48, 48, (i/40) * 48);
+  }
+  g.generateTexture('enemy_glow', 96, 96);
+
+  // ===================== EFFECTS =====================
+
+  // Streetlight glow — LARGE warm glow (rendered above darkness)
+  g.clear();
+  for (let i = 60; i > 0; i--) {
+    g.fillStyle(0xffddaa, (1 - i/60) * 0.75);
+    g.fillCircle(100, 100, (i/60) * 100);
+  }
+  g.generateTexture('streetglow', 200, 200);
+
+  // Match glow
+  g.clear();
+  for (let i = 40; i > 0; i--) {
+    g.fillStyle(0xffaa44, (1 - i/40) * 0.6);
+    g.fillCircle(50, 50, (i/40) * 50);
+  }
+  g.generateTexture('matchglow', 100, 100);
+
+  // Rain
+  g.clear();
+  g.fillStyle(0x8899cc, 0.5);
+  g.fillRect(0, 0, 1, 10);
+  g.generateTexture('rain', 1, 10);
+
+  // Ripple
+  g.clear();
+  g.lineStyle(0.5, 0x4466aa, 0.3);
+  g.strokeCircle(8, 8, 6);
+  g.generateTexture('ripple', 16, 16);
+
+  // Dark ripple (enemy)
+  g.clear();
+  g.lineStyle(1.5, 0x330044, 0.6);
+  g.strokeCircle(16, 16, 12);
+  g.lineStyle(0.5, 0x440055, 0.3);
+  g.strokeCircle(16, 16, 8);
+  g.generateTexture('dark_ripple', 32, 32);
+
+  // Hand dot
+  g.clear();
+  for (let i = 4; i > 0; i--) {
+    g.fillStyle(0xffcc66, (1 - i/4) * 0.7);
+    g.fillCircle(3, 3, i);
+  }
+  g.generateTexture('hand_dot', 6, 6);
+
+  g.destroy();
+}
+
+// ============================================
+// LIGHT SYSTEM
+// ============================================
+function isInLight(x, y, lightZones) {
+  for (const z of lightZones) {
+    if (z.radius > 0 && Phaser.Math.Distance.Between(x, y, z.x, z.y) < z.radius) return true;
+  }
+  return false;
+}
+
+function getLightLevel(x, y, lightZones) {
+  let lv = 0;
+  for (const z of lightZones) {
+    if (z.radius > 0) {
+      lv += Math.max(0, 1 - Phaser.Math.Distance.Between(x, y, z.x, z.y) / z.radius) * 0.6;
+    }
+  }
+  return Math.min(lv, 1);
+}
+
+function updateMirrors(sisterX, sisterY, lightZones, stageConfig) {
+  lightZones.forEach(z => {
+    if (z.mirror) {
+      const d = Phaser.Math.Distance.Between(sisterX, sisterY, z.x, z.y);
+      const mirrorRad = stageConfig.MIRROR_RADIUS || CONFIG.MIRROR_RADIUS;
+      z.radius = d < CONFIG.MIRROR_ACTIVATE_DIST ? mirrorRad : 0;
+      z.mirror.isReflecting = d < CONFIG.MIRROR_ACTIVATE_DIST;
+    }
+  });
+}
+
+function getEnemyLightRepel(enemyX, enemyY, lightZones, dt) {
+  const level = getLightLevel(enemyX, enemyY, lightZones);
+  if (level <= CONFIG.ENEMY_LIGHT_REPEL_THRESHOLD) return { dx: 0, dy: 0 };
+  const repelStr = level * CONFIG.ENEMY_LIGHT_REPEL_STRENGTH;
+  let nearX = enemyX, nearY = enemyY, nearD = 9999;
+  for (const z of lightZones) {
+    if (z.radius <= 0) continue;
+    const ld = Phaser.Math.Distance.Between(enemyX, enemyY, z.x, z.y);
+    if (ld < nearD) { nearD = ld; nearX = z.x; nearY = z.y; }
+  }
+  if (nearD >= 9999) return { dx: 0, dy: 0 };
+  const ax = enemyX - nearX, ay = enemyY - nearY;
+  const ad = Math.sqrt(ax * ax + ay * ay) || 1;
+  return { dx: (ax / ad) * repelStr * dt, dy: (ay / ad) * repelStr * dt };
+}
+
+// ============================================
+// MAIN SCENE
+// ============================================
+class GameScene extends Phaser.Scene {
+  constructor() { super('GameScene'); }
+
+  create() {
+    this.stageConfig = {};
+    if (currentStage === 2) Object.assign(this.stageConfig, STAGE2_OVERRIDES);
+    if (currentStage === 3) Object.assign(this.stageConfig, STAGE3_OVERRIDES);
+
+    generateTextures(this);
+
+    let mapData, positions;
+    if (currentStage === 1) { mapData = generateStage1(); positions = getStage1Positions(); }
+    else if (currentStage === 2) { mapData = generateStage2(); positions = getStage2Positions(); }
+    else { mapData = generateStage3(); positions = getStage3Positions(); }
+
+    this.mapData = mapData;
+    this.wallGroup = this.physics.add.staticGroup();
+    this.streetlights = [];
+    this.streetlightGlows = [];
+    this.lightZones = [];
+    this.mirrorSprites = [];
+    this.goalSprites = [];
+    this.goalGlows = [];
+    this.breakLights = [];
+    this.switchDoorPairs = [];
+    this.matchItems = [];
+    this.hiddenPassages = [];
+    this.pushBoxes = [];
+
+    // ===== DEPTH LAYERS =====
+    // 0: map tiles (floor, walls)
+    // 5: gimmicks
+    // 10: rain, ripples
+    // 15: enemies
+    // 20: characters
+    // 50: DARKNESS LAYER (Phaser rectangle)
+    // 60: LIGHT GLOWS (ADD blend, punch through darkness)
+    // 65: Character glow halos (ADD blend above darkness)
+    // 70: UI-related in-game text
+
+    // Build map tiles
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const tx = c * TILE + TILE / 2;
+        const ty = r * TILE + TILE / 2;
+        const tile = mapData[r][c];
+
+        if (tile === TILE_WALL) {
+          const w = this.physics.add.staticImage(tx, ty, 'wall').setDepth(0);
+          this.wallGroup.add(w);
+        } else if (tile === TILE_SHOP) {
+          const s = this.physics.add.staticImage(tx, ty, 'shop').setDepth(0);
+          this.wallGroup.add(s);
+        } else if (tile === TILE_FLOOR) {
+          this.add.image(tx, ty, 'floor').setDepth(0);
+        } else if (tile === TILE_STREETLIGHT) {
+          this.add.image(tx, ty, 'floor').setDepth(0);
+          const sl = this.add.image(tx, ty, 'streetlight').setDepth(1);
+          this.streetlights.push(sl);
+          const rad = this.stageConfig.STREETLIGHT_RADIUS || CONFIG.STREETLIGHT_RADIUS;
+          // Glow rendered ABOVE darkness layer with ADD blend
+          const gl = this.add.image(tx, ty, 'streetglow').setAlpha(0.7).setScale(rad / 100).setBlendMode(Phaser.BlendModes.ADD).setDepth(60);
+          this.streetlightGlows.push(gl);
+          this.lightZones.push({ x: tx, y: ty, radius: rad, baseAlpha: 0.7, glow: gl });
+        } else if (tile === TILE_BREAKLIGHT) {
+          this.add.image(tx, ty, 'floor').setDepth(0);
+          const bl = this.add.image(tx, ty, 'breaklight').setDepth(1);
+          const rad = this.stageConfig.STREETLIGHT_RADIUS || CONFIG.STREETLIGHT_RADIUS;
+          const blGlow = this.add.image(tx, ty, 'streetglow').setAlpha(0.7).setScale(rad / 100).setBlendMode(Phaser.BlendModes.ADD).setDepth(60);
+          const lzIdx = this.lightZones.length;
+          this.lightZones.push({ x: tx, y: ty, radius: rad, baseAlpha: 0.7, glow: blGlow, isBreakable: true });
+          this.breakLights.push({
+            sprite: bl, glow: blGlow, x: tx, y: ty,
+            timer: 0, lifetime: CONFIG.BREAKLIGHT_LIFETIME, dead: false,
+            lightZoneIdx: lzIdx,
+          });
+          this.streetlights.push(bl);
+          this.streetlightGlows.push(blGlow);
+        } else if (tile === TILE_MIRROR) {
+          this.add.image(tx, ty, 'floor').setDepth(0);
+          const m = this.add.image(tx, ty, 'mirror').setDepth(1);
+          m.isReflecting = false;
+          this.mirrorSprites.push(m);
+          this.lightZones.push({ x: tx, y: ty, radius: 0, baseAlpha: 0.6, mirror: m });
+        } else if (tile === TILE_GOAL) {
+          const gTile = this.add.image(tx, ty, 'goal').setDepth(1);
+          this.goalSprites.push(gTile);
+          // Goal glow ABOVE darkness
+          const gg = this.add.image(tx, ty, 'goalglow').setAlpha(0.7).setScale(0.6).setBlendMode(Phaser.BlendModes.ADD).setDepth(60);
+          this.goalGlows.push(gg);
+          this.lightZones.push({ x: tx, y: ty, radius: CONFIG.GOAL_LIGHT_RADIUS, baseAlpha: 0.7, goalGlow: gg });
+        } else if (tile === TILE_PUSHBOX) {
+          this.add.image(tx, ty, 'floor').setDepth(0);
+          const box = this.physics.add.image(tx, ty, 'pushbox').setDepth(5);
+          box.setImmovable(true);
+          box.body.setSize(TILE, TILE);
+          box.setPushable(false);
+          box.gridR = r;
+          box.gridC = c;
+          this.pushBoxes.push(box);
+        } else if (tile === TILE_SWITCH) {
+          this.add.image(tx, ty, 'floor').setDepth(0);
+          const sw = this.add.image(tx, ty, 'switch_off').setDepth(5);
+          sw.switchId = null;
+          sw.activated = false;
+          sw.tileR = r;
+          sw.tileC = c;
+          sw._posKey = r + '_' + c;
+        } else if (tile === TILE_DOOR) {
+          const dr = this.physics.add.staticImage(tx, ty, 'door').setDepth(0);
+          this.wallGroup.add(dr);
+          dr.isDoor = true;
+          dr.doorOpen = false;
+          dr.tileR = r;
+          dr.tileC = c;
+          dr._posKey = r + '_' + c;
+        } else if (tile === TILE_MATCH) {
+          this.add.image(tx, ty, 'floor').setDepth(0);
+          const mi = this.add.image(tx, ty, 'match_item').setDepth(5);
+          mi.tileR = r;
+          mi.tileC = c;
+          mi.collected = false;
+          this.matchItems.push(mi);
+        } else if (tile === TILE_HIDDEN) {
+          const hw = this.physics.add.staticImage(tx, ty, 'hidden_wall').setDepth(0);
+          this.wallGroup.add(hw);
+          hw.isHidden = true;
+          hw.revealed = false;
+          hw.tileR = r;
+          hw.tileC = c;
+          this.hiddenPassages.push(hw);
+        }
+      }
+    }
+
+    // Link switches to doors
+    if (positions.switchDoors) {
+      positions.switchDoors.forEach(sd => {
+        const switchKey = sd.switchPos.r + '_' + sd.switchPos.c;
+        const doorKey = sd.doorPos.r + '_' + sd.doorPos.c;
+        let switchSprite = null, doorSprite = null;
+
+        this.children.list.forEach(child => {
+          if (child._posKey === switchKey && child.texture && child.texture.key === 'switch_off') switchSprite = child;
+        });
+
+        this.wallGroup.children.entries.forEach(child => {
+          if (child._posKey === doorKey && child.isDoor) doorSprite = child;
+        });
+
+        if (switchSprite && doorSprite) {
+          this.switchDoorPairs.push({
+            id: sd.switchId,
+            switchSprite: switchSprite,
+            doorSprite: doorSprite,
+            activated: false,
+            switchX: sd.switchPos.c * TILE + TILE / 2,
+            switchY: sd.switchPos.r * TILE + TILE / 2,
+          });
+        }
+      });
+    }
+
+    // ===== DARKNESS LAYER — Phaser rectangle at depth 50 =====
+    const baseDark = this.stageConfig.DARKNESS_BASE || CONFIG.DARKNESS_BASE;
+    this.darknessRect = this.add.rectangle(W/2, H/2, W, H, 0x000000).setDepth(50).setAlpha(baseDark);
+
+    // ===== RED OVERLAY — Phaser rectangle at depth 51 (enemy proximity) =====
+    this.redOverlay = this.add.rectangle(W/2, H/2, W, H, 0x3c0000).setDepth(51).setAlpha(0);
+
+    // ===== LIGHTNING FLASH — Phaser rectangle at depth 52 =====
+    this.lightningRect = this.add.rectangle(W/2, H/2, W, H, 0xffffff).setDepth(52).setAlpha(0);
+
+    // Sister (player) — sprite at depth 20, glow halo at depth 65
+    this.sister = this.physics.add.sprite(positions.sister.x, positions.sister.y, 'sister').setDepth(20);
+    this.sister.setCollideWorldBounds(true);
+    this.sister.body.setSize(24, 24);
+    this.physics.add.collider(this.sister, this.wallGroup);
+
+    // Sister glow halo (above darkness, ADD blend)
+    this.sisterGlow = this.add.image(positions.sister.x, positions.sister.y, 'sister_glow')
+      .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.8).setDepth(65);
+
+    // Brother (AI)
+    this.brother = this.physics.add.sprite(positions.brother.x, positions.brother.y, 'brother').setDepth(20);
+    this.brother.setCollideWorldBounds(true);
+    this.brother.body.setSize(20, 20);
+    this.brother.fearGauge = 0;
+    this.brother.fearFrozen = false;
+    this.physics.add.collider(this.brother, this.wallGroup);
+
+    // Brother glow halo
+    this.brotherGlow = this.add.image(positions.brother.x, positions.brother.y, 'brother_glow')
+      .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.7).setDepth(65);
+
+    // Pushable box colliders
+    this.pushBoxes.forEach(box => {
+      this.physics.add.collider(this.sister, box, (sis, b) => this.handleBoxPush(sis, b));
+      this.physics.add.collider(this.brother, box);
+    });
+
+    // Enemies
+    this.enemies = [];
+    this.enemySprites = [];
+    this.enemyGlows = [];
+    this.enemyTimers = [];
+    positions.enemies.forEach(ep => {
+      const eSprite = this.add.image(ep.x, ep.y, 'shadow_enemy').setAlpha(0.6).setScale(1.0).setDepth(15);
+      // Enemy red glow above darkness
+      const eGlow = this.add.image(ep.x, ep.y, 'enemy_glow')
+        .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.3).setDepth(60);
+      this.enemies.push({ x: ep.x, y: ep.y });
+      this.enemySprites.push(eSprite);
+      this.enemyGlows.push(eGlow);
+      this.enemyTimers.push(0);
+    });
+
+    // Enemy dark ripples
+    this.darkRipples = [];
+    this.enemies.forEach(() => {
+      const dr = this.add.image(0, 0, 'dark_ripple').setAlpha(0).setScale(0.5).setDepth(10);
+      this.darkRipples.push(dr);
+    });
+
+    // Rain
+    const rainCount = this.stageConfig.RAIN_COUNT || CONFIG.RAIN_COUNT;
+    const windX = this.stageConfig.RAIN_WIND_X || CONFIG.RAIN_WIND_X;
+    this.rainDrops = [];
+    for (let i = 0; i < rainCount; i++) {
+      const drop = this.add.image(
+        Phaser.Math.Between(0, W),
+        Phaser.Math.Between(-H, H),
+        'rain'
+      ).setAlpha(0.2).setBlendMode(Phaser.BlendModes.ADD).setDepth(10);
+      drop.speedY = Phaser.Math.Between(250, 350);
+      drop.speedX = windX + Phaser.Math.Between(-10, 10);
+      this.rainDrops.push(drop);
+    }
+
+    // Ripples
+    this.ripples = [];
+    for (let i = 0; i < 8; i++) {
+      const rip = this.add.image(
+        Phaser.Math.Between(TILE * 2, W - TILE * 2),
+        Phaser.Math.Between(TILE * 2, H - TILE * 2),
+        'ripple'
+      ).setAlpha(0).setScale(0.3).setDepth(10);
+      rip.timer = Phaser.Math.Between(0, 200);
+      this.ripples.push(rip);
+    }
+
+    // Hand holding
+    this.isHoldingHand = false;
+    this.handDots = [];
+    for (let i = 0; i < 5; i++) {
+      this.handDots.push(this.add.image(0, 0, 'hand_dot').setAlpha(0).setBlendMode(Phaser.BlendModes.ADD).setDepth(65));
+    }
+
+    // Match/light item state
+    this.matchCount = 0;
+    this.matchActive = false;
+    this.matchTimer = 0;
+    this.matchGlow = this.add.image(0, 0, 'matchglow').setAlpha(0).setScale(1).setBlendMode(Phaser.BlendModes.ADD).setDepth(60);
+    this.matchLightZone = { x: 0, y: 0, radius: 0, baseAlpha: 0.6, isMatch: true };
+    this.lightZones.push(this.matchLightZone);
+
+    // Lightning state (Stage 3)
+    this.lightningTimer = 0;
+    this.lightningNextAt = currentStage === 3 ?
+      Phaser.Math.Between(this.stageConfig.LIGHTNING_INTERVAL_MIN, this.stageConfig.LIGHTNING_INTERVAL_MAX) : 999999;
+    this.lightningPhase = 'idle';
+    this.lightningPhaseTimer = 0;
+
+    // Mirror glow sprites (above darkness)
+    this.mirrorGlows = [];
+    this.mirrorSprites.forEach(m => {
+      const mg = this.add.image(m.x, m.y, 'streetglow').setAlpha(0).setScale(0.5).setBlendMode(Phaser.BlendModes.ADD).setDepth(60);
+      this.mirrorGlows.push(mg);
+    });
+
+    // Input
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.wasd = this.input.keyboard.addKeys('W,A,S,D');
+    this.keyE = this.input.keyboard.addKey('E');
+    this.keyF = this.input.keyboard.addKey('F');
+    this.touchTarget = null;
+
+    this.input.on('pointerdown', (p) => {
+      const dBro = Phaser.Math.Distance.Between(p.x, p.y, this.brother.x, this.brother.y);
+      if (dBro < 50 && !this.isHoldingHand) {
+        this.tryHoldHand();
+      } else {
+        this.touchTarget = { x: p.x, y: p.y };
+      }
+    });
+    this.input.on('pointermove', (p) => {
+      if (p.isDown) this.touchTarget = { x: p.x, y: p.y };
+    });
+    this.input.on('pointerup', () => { this.touchTarget = null; });
+
+    this.keyE.on('down', () => this.tryHoldHand());
+    this.keyF.on('down', () => useMatch());
+
+    // Goal state
+    this.sisterAtGoal = false;
+    this.brotherAtGoal = false;
+    this.cleared = false;
+    this.gameOver = false;
+
+    // UI
+    document.getElementById('stage-indicator').textContent = STAGE_NAMES[currentStage] || '';
+    document.getElementById('fear-fill').style.width = '0%';
+    document.getElementById('hand-hint').textContent = '';
+    document.getElementById('goal-hint').style.display = 'none';
+    document.getElementById('match-hud').style.display = 'none';
+    document.getElementById('gameover-screen').style.display = 'none';
+    document.getElementById('clear-screen').style.display = 'none';
+    document.getElementById('ending-screen').style.display = 'none';
+
+    window._gameScene = this;
+  }
+
+  handleBoxPush(sister, box) {
+    const vx = sister.body.velocity.x;
+    const vy = sister.body.velocity.y;
+
+    if (Math.abs(vx) < 5 && Math.abs(vy) < 5) return;
+
+    let pushDx = 0, pushDy = 0;
+    if (Math.abs(vx) > Math.abs(vy)) {
+      pushDx = vx > 0 ? TILE : -TILE;
+    } else {
+      pushDy = vy > 0 ? TILE : -TILE;
+    }
+
+    const newX = box.x + pushDx;
+    const newY = box.y + pushDy;
+
+    const destC = Math.floor(newX / TILE);
+    const destR = Math.floor(newY / TILE);
+
+    if (destR < 0 || destR >= ROWS || destC < 0 || destC >= COLS) return;
+
+    const destTile = this.mapData[destR][destC];
+    if (destTile === TILE_WALL || destTile === TILE_SHOP || destTile === TILE_DOOR) return;
+
+    for (const otherBox of this.pushBoxes) {
+      if (otherBox === box) continue;
+      if (Math.abs(otherBox.x - newX) < TILE / 2 && Math.abs(otherBox.y - newY) < TILE / 2) return;
+    }
+
+    box.x = newX;
+    box.y = newY;
+    box.body.reset(newX, newY);
+    box.gridR = destR;
+    box.gridC = destC;
+  }
+
+  tryHoldHand() {
+    const d = Phaser.Math.Distance.Between(this.sister.x, this.sister.y, this.brother.x, this.brother.y);
+    if (d < CONFIG.HAND_REACH && !this.isHoldingHand) {
+      this.isHoldingHand = true;
+    }
+  }
+
+  update(time, delta) {
+    if (this.cleared || this.gameOver) return;
+    const dt = delta / 1000;
+
+    // --- Sister movement ---
+    let vx = 0, vy = 0;
+    if (this.cursors.left.isDown || this.wasd.A.isDown) vx = -1;
+    if (this.cursors.right.isDown || this.wasd.D.isDown) vx = 1;
+    if (this.cursors.up.isDown || this.wasd.W.isDown) vy = -1;
+    if (this.cursors.down.isDown || this.wasd.S.isDown) vy = 1;
+
+    if (this.touchTarget) {
+      const tdx = this.touchTarget.x - this.sister.x;
+      const tdy = this.touchTarget.y - this.sister.y;
+      if (Math.sqrt(tdx * tdx + tdy * tdy) > 10) {
+        vx = tdx; vy = tdy;
+      }
+    }
+
+    const mag = Math.sqrt(vx * vx + vy * vy);
+    if (mag > 0) {
+      this.sister.setVelocity((vx / mag) * CONFIG.SISTER_SPEED, (vy / mag) * CONFIG.SISTER_SPEED);
+    } else {
+      this.sister.setVelocity(0, 0);
+    }
+
+    // --- Sister glow pulse ---
+    this.sister.setAlpha(0.85 + Math.sin(time / 400) * 0.1);
+    // Sister glow halo follows sister, above darkness
+    this.sisterGlow.setPosition(this.sister.x, this.sister.y);
+    this.sisterGlow.setAlpha(0.7 + Math.sin(time / 400) * 0.15);
+
+    // --- Match item pickup ---
+    this.matchItems.forEach(mi => {
+      if (mi.collected) return;
+      const md = Phaser.Math.Distance.Between(this.sister.x, this.sister.y, mi.x, mi.y);
+      if (md < TILE) {
+        mi.collected = true;
+        mi.setVisible(false);
+        this.matchCount++;
+        this.updateMatchHUD();
+      }
+    });
+
+    // --- Match light ---
+    if (this.matchActive) {
+      this.matchTimer -= dt;
+      this.matchLightZone.x = this.sister.x;
+      this.matchLightZone.y = this.sister.y;
+
+      if (this.matchTimer <= 0) {
+        this.matchActive = false;
+        this.matchLightZone.radius = 0;
+        this.matchGlow.setAlpha(0);
+      } else if (this.matchTimer < CONFIG.MATCH_FADE_TIME) {
+        const fade = this.matchTimer / CONFIG.MATCH_FADE_TIME;
+        this.matchLightZone.radius = CONFIG.MATCH_LIGHT_RADIUS * fade;
+        this.matchGlow.setAlpha(0.6 * fade);
+        this.matchGlow.setScale(fade);
+      } else {
+        this.matchLightZone.radius = CONFIG.MATCH_LIGHT_RADIUS;
+        this.matchGlow.setAlpha(0.6 + Math.sin(time / 200) * 0.1);
+      }
+      this.matchGlow.setPosition(this.sister.x, this.sister.y);
+    }
+
+    // --- Match item pulse ---
+    this.matchItems.forEach(mi => {
+      if (!mi.collected) {
+        mi.setAlpha(0.6 + Math.sin(time / 500 + mi.x) * 0.3);
+        mi.setScale(0.9 + Math.sin(time / 600 + mi.y) * 0.1);
+      }
+    });
+
+    // --- Breakable streetlights ---
+    this.breakLights.forEach(bl => {
+      if (bl.dead) return;
+      bl.timer += dt;
+      const remaining = bl.lifetime - bl.timer;
+
+      if (remaining <= 0) {
+        bl.dead = true;
+        bl.sprite.setTexture('breaklight_dead');
+        bl.glow.setAlpha(0);
+        this.lightZones[bl.lightZoneIdx].radius = 0;
+      } else if (remaining < CONFIG.BREAKLIGHT_WARN_TIME) {
+        const flickerRate = 1 - (remaining / CONFIG.BREAKLIGHT_WARN_TIME);
+        const flicker = Math.random() < (0.3 + flickerRate * 0.5) ? 0.05 : 0.6;
+        bl.glow.setAlpha(flicker);
+        const rad = (this.stageConfig.STREETLIGHT_RADIUS || CONFIG.STREETLIGHT_RADIUS) * (remaining / CONFIG.BREAKLIGHT_WARN_TIME);
+        this.lightZones[bl.lightZoneIdx].radius = rad;
+      }
+    });
+
+    // --- Switch & Door ---
+    this.switchDoorPairs.forEach(sd => {
+      if (sd.activated) return;
+      const dist = Phaser.Math.Distance.Between(this.sister.x, this.sister.y, sd.switchX, sd.switchY);
+      if (dist < TILE) {
+        sd.activated = true;
+        sd.switchSprite.setTexture('switch_on');
+        sd.doorSprite.setVisible(false);
+        sd.doorSprite.body.enable = false;
+        sd.doorSprite.doorOpen = true;
+        this.add.image(sd.doorSprite.x, sd.doorSprite.y, 'floor').setDepth(0);
+        this.mapData[sd.doorSprite.tileR][sd.doorSprite.tileC] = TILE_FLOOR;
+      }
+    });
+
+    // --- Hidden passages ---
+    this.hiddenPassages.forEach(hp => {
+      if (hp.revealed) return;
+      this.lightZones.forEach(z => {
+        if (z.mirror && z.radius > 0) {
+          const hd = Phaser.Math.Distance.Between(hp.x, hp.y, z.x, z.y);
+          if (hd < z.radius) {
+            hp.revealed = true;
+            hp.setTexture('hidden_revealed');
+            hp.body.enable = false;
+            this.mapData[hp.tileR][hp.tileC] = TILE_FLOOR;
+            this.tweens.add({
+              targets: hp,
+              alpha: { from: 0.3, to: 0.8 },
+              duration: 500,
+              yoyo: true,
+              repeat: 2,
+              onComplete: () => hp.setAlpha(0.7),
+            });
+          }
+        }
+      });
+    });
+
+    // --- Update mirrors ---
+    updateMirrors(this.sister.x, this.sister.y, this.lightZones, this.stageConfig);
+
+    // --- Mirror glow animation ---
+    this.mirrorSprites.forEach((m, i) => {
+      if (m.isReflecting) {
+        m.setAlpha(0.8 + Math.sin(time / 300) * 0.15);
+        if (this.mirrorGlows[i]) {
+          this.mirrorGlows[i].setAlpha(0.5 + Math.sin(time / 300) * 0.15);
+        }
+      } else {
+        m.setAlpha(0.5);
+        if (this.mirrorGlows[i]) {
+          this.mirrorGlows[i].setAlpha(0);
+        }
+      }
+    });
+
+    // --- Enemy AI ---
+    let closestEnemyDist = 9999;
+    this.enemies.forEach((enemy, i) => {
+      let chaseX = this.sister.x, chaseY = this.sister.y;
+      if (this.brother.fearFrozen) {
+        chaseX = this.brother.x;
+        chaseY = this.brother.y;
+      }
+
+      this.enemyTimers[i] += dt;
+      const weaveX = Math.sin(this.enemyTimers[i] * 1.2 + i * 2) * 15;
+      const weaveY = Math.cos(this.enemyTimers[i] * 0.9 + i * 2) * 12;
+
+      const edx = (chaseX + weaveX) - enemy.x;
+      const edy = (chaseY + weaveY) - enemy.y;
+      const ed = Math.sqrt(edx * edx + edy * edy);
+
+      const speedFar = this.stageConfig.ENEMY_SPEED_FAR || CONFIG.ENEMY_SPEED_FAR;
+      const speedNear = this.stageConfig.ENEMY_SPEED_NEAR || CONFIG.ENEMY_SPEED_NEAR;
+      const chaseSpeed = ed > CONFIG.ENEMY_SPEED_THRESHOLD ? speedFar : speedNear;
+
+      if (ed > 5) {
+        enemy.x += (edx / ed) * chaseSpeed * dt;
+        enemy.y += (edy / ed) * chaseSpeed * dt;
+      }
+
+      const repel = getEnemyLightRepel(enemy.x, enemy.y, this.lightZones, dt);
+      enemy.x += repel.dx;
+      enemy.y += repel.dy;
+
+      this.pushBoxes.forEach(box => {
+        const bd = Phaser.Math.Distance.Between(enemy.x, enemy.y, box.x, box.y);
+        if (bd < TILE) {
+          const bx = enemy.x - box.x, by = enemy.y - box.y;
+          const bm = Math.sqrt(bx * bx + by * by) || 1;
+          enemy.x += (bx / bm) * 20 * dt;
+          enemy.y += (by / bm) * 20 * dt;
+        }
+      });
+
+      enemy.x = Phaser.Math.Clamp(enemy.x, TILE * 2, W - TILE * 2);
+      enemy.y = Phaser.Math.Clamp(enemy.y, TILE * 2, H - TILE * 2);
+
+      const sisterDist = Phaser.Math.Distance.Between(this.sister.x, this.sister.y, enemy.x, enemy.y);
+      if (sisterDist < closestEnemyDist) closestEnemyDist = sisterDist;
+
+      // Wobble + scale
+      const wobIntensity = Phaser.Math.Clamp((300 - sisterDist) / 200, 0.3, 1.5);
+      const wobX = Math.sin(time / 200 + i * 100) * 6 * wobIntensity;
+      const wobY = Math.cos(time / 280 + i * 100) * 5 * wobIntensity;
+      this.enemySprites[i].setPosition(enemy.x + wobX, enemy.y + wobY);
+
+      // Enemy red glow — intensifies when close
+      const glowIntensity = Phaser.Math.Clamp((250 - sisterDist) / 200, 0.1, 0.7);
+      this.enemyGlows[i].setPosition(enemy.x, enemy.y);
+      this.enemyGlows[i].setAlpha(glowIntensity);
+      this.enemyGlows[i].setScale(0.8 + glowIntensity * 0.5);
+
+      // Opacity ramp
+      const baseVis = Phaser.Math.Clamp((300 - sisterDist) / 250, 0.15, 0.9);
+      this.enemySprites[i].setAlpha(baseVis + Math.sin(time / 300 + i) * 0.08);
+      const scaleRamp = Phaser.Math.Clamp(0.8 + (300 - sisterDist) / 400, 0.8, 1.3);
+      this.enemySprites[i].setScale(scaleRamp + Math.sin(time / 500 + i) * 0.08);
+
+      // Dark ripple trail
+      if (time % 600 < 20 + i * 5) {
+        this.darkRipples[i].setPosition(enemy.x, enemy.y + 20);
+        this.darkRipples[i].setAlpha(0.35);
+        this.darkRipples[i].setScale(0.5);
+      }
+      if (this.darkRipples[i].alpha > 0) {
+        this.darkRipples[i].setAlpha(this.darkRipples[i].alpha - dt * 0.4);
+        this.darkRipples[i].setScale(this.darkRipples[i].scaleX + dt * 0.25);
+      }
+
+      // Kill check
+      const distSis = Phaser.Math.Distance.Between(this.sister.x, this.sister.y, enemy.x, enemy.y);
+      const distBro = Phaser.Math.Distance.Between(this.brother.x, this.brother.y, enemy.x, enemy.y);
+      if (distSis < CONFIG.ENEMY_KILL_DIST || distBro < CONFIG.ENEMY_KILL_DIST) {
+        this.triggerGameOver();
+        return;
+      }
+    });
+
+    // --- Brother AI ---
+    const brotherInLight = isInLight(this.brother.x, this.brother.y, this.lightZones);
+
+    const closestEnemyDistBro = this.enemies.reduce((min, e) => {
+      return Math.min(min, Phaser.Math.Distance.Between(this.brother.x, this.brother.y, e.x, e.y));
+    }, 9999);
+
+    this.brother.fearGauge = Phaser.Math.Clamp(
+      this.brother.fearGauge + (
+        (brotherInLight ? CONFIG.FEAR_RATE_LIT : CONFIG.FEAR_RATE_DARK) +
+        Math.max(0, (CONFIG.FEAR_ENEMY_RANGE - closestEnemyDistBro) / CONFIG.FEAR_ENEMY_RANGE) * CONFIG.FEAR_ENEMY_MAX +
+        (this.isHoldingHand ? CONFIG.FEAR_HOLDING_BONUS : 0)
+      ) * dt, 0, 100
+    );
+
+    if (!this.brother.fearFrozen && this.brother.fearGauge >= CONFIG.FEAR_FREEZE_THRESHOLD) {
+      this.brother.fearFrozen = true;
+      this.isHoldingHand = false;
+    }
+    if (this.brother.fearFrozen && this.isHoldingHand && this.brother.fearGauge <= CONFIG.FEAR_UNFREEZE_THRESHOLD) {
+      this.brother.fearFrozen = false;
+    }
+
+    if (this.brother.fearFrozen) {
+      this.brother.setVelocity(0, 0);
+      this.brother.setAlpha(0.4 + Math.sin(time / 150) * 0.2);
+      this.brotherGlow.setAlpha(0.2 + Math.sin(time / 150) * 0.1);
+    } else {
+      this.brother.setAlpha(0.8 + Math.sin(time / 500) * 0.1);
+      this.brotherGlow.setAlpha(0.6 + Math.sin(time / 500) * 0.15);
+      let tx, ty;
+      if (this.isHoldingHand) {
+        const a = Math.atan2(this.sister.y - this.brother.y, this.sister.x - this.brother.x);
+        tx = this.sister.x - Math.cos(a) * 28;
+        ty = this.sister.y - Math.sin(a) * 28;
+      } else {
+        tx = this.sister.x;
+        ty = this.sister.y;
+      }
+      const dx = tx - this.brother.x, dy = ty - this.brother.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const bs = this.isHoldingHand ? CONFIG.BROTHER_SPEED_HOLDING :
+        (brotherInLight ? CONFIG.BROTHER_SPEED_LIT : CONFIG.BROTHER_SPEED_DARK);
+      if (d > 20) {
+        this.brother.setVelocity((dx / d) * bs, (dy / d) * bs);
+      } else {
+        this.brother.setVelocity(0, 0);
+      }
+    }
+
+    // Brother glow follows brother
+    this.brotherGlow.setPosition(this.brother.x, this.brother.y);
+
+    // Hand break
+    if (this.isHoldingHand) {
+      const hd = Phaser.Math.Distance.Between(this.sister.x, this.sister.y, this.brother.x, this.brother.y);
+      if (hd > CONFIG.HAND_BREAK) this.isHoldingHand = false;
+    }
+
+    // --- Streetlight flicker ---
+    this.streetlightGlows.forEach((gl, i) => {
+      const blInfo = this.breakLights.find(b => b.glow === gl);
+      if (blInfo && blInfo.dead) return;
+      if (blInfo) return;
+
+      const sl = this.streetlights[i];
+      if (!sl) return;
+      const nearestEnemyDist = this.enemies.reduce((min, e) => {
+        return Math.min(min, Phaser.Math.Distance.Between(sl.x, sl.y, e.x, e.y));
+      }, 9999);
+      const lz = this.lightZones[i];
+      const ba = lz ? lz.baseAlpha : 0.7;
+      if (nearestEnemyDist < 140) gl.setAlpha(0.1 + Math.random() * 0.3);
+      else if (nearestEnemyDist < 240) gl.setAlpha(ba * (0.5 + Math.random() * 0.4));
+      else gl.setAlpha(ba + Math.sin(time / 600 + i) * 0.08);
+    });
+
+    // --- Goal glow pulse ---
+    this.goalGlows.forEach((gg, i) => {
+      gg.setAlpha(0.6 + Math.sin(time / 800 + i) * 0.15);
+      gg.setScale(0.6 + Math.sin(time / 1200 + i) * 0.05);
+    });
+
+    // --- Rain ---
+    const windX = this.stageConfig.RAIN_WIND_X || CONFIG.RAIN_WIND_X;
+    this.rainDrops.forEach(drop => {
+      drop.y += drop.speedY * dt;
+      drop.x += drop.speedX * dt;
+      if (drop.y > H) { drop.y = Phaser.Math.Between(-20, -5); drop.x = Phaser.Math.Between(0, W); }
+      if (drop.x < 0) drop.x = W;
+      if (drop.x > W) drop.x = 0;
+
+      let nearEnemy = false;
+      this.enemies.forEach(e => {
+        if (Phaser.Math.Distance.Between(drop.x, drop.y, e.x, e.y) < 90) nearEnemy = true;
+      });
+      if (nearEnemy) {
+        drop.setAlpha(0.6); drop.setTint(0x8866aa);
+        drop.x += Math.sin(time / 100 + drop.y) * 2;
+      } else {
+        drop.setAlpha(Phaser.Math.FloatBetween(0.1, 0.25)); drop.clearTint();
+      }
+    });
+
+    // --- Ripples ---
+    this.ripples.forEach(rip => {
+      rip.timer += dt * 100;
+      if (rip.timer > 200) {
+        rip.timer = 0;
+        rip.x = Phaser.Math.Between(TILE * 2, W - TILE * 2);
+        rip.y = Phaser.Math.Between(TILE * 2, H - TILE * 2);
+        rip.setAlpha(0.3); rip.setScale(0.3);
+      }
+      if (rip.timer < 100) {
+        rip.setAlpha(0.3 * (1 - rip.timer / 100));
+        rip.setScale(0.3 + rip.timer / 100 * 0.7);
+      }
+      let nearEnemy = false;
+      this.enemies.forEach(e => {
+        if (Phaser.Math.Distance.Between(rip.x, rip.y, e.x, e.y) < 100) nearEnemy = true;
+      });
+      if (nearEnemy) { rip.setTint(0x5533aa); rip.setScale(rip.scaleX * 1.3); }
+      else rip.clearTint();
+    });
+
+    // --- Hand dots ---
+    if (this.isHoldingHand) {
+      this.handDots.forEach((dot, i) => {
+        const t = (i + 1) / 6;
+        dot.setPosition(
+          Phaser.Math.Linear(this.sister.x, this.brother.x, t),
+          Phaser.Math.Linear(this.sister.y, this.brother.y, t)
+        );
+        dot.setAlpha(0.5 + Math.sin(time / 250 + i * 1.5) * 0.3);
+      });
+    } else {
+      this.handDots.forEach(dot => dot.setAlpha(0));
+    }
+
+    // --- Lightning (Stage 3) — now uses Phaser rectangles ---
+    if (currentStage === 3) {
+      this.updateLightning(time, dt);
+    }
+
+    // --- DARKNESS LAYER (Phaser) — update alpha based on enemy proximity ---
+    const baseDark = this.stageConfig.DARKNESS_BASE || CONFIG.DARKNESS_BASE;
+    let darkAlpha = baseDark + Math.max(0, (200 - closestEnemyDist) / 200) * CONFIG.DARKNESS_ENEMY_BONUS;
+
+    if (currentStage === 3 && this.lightningPhase === 'dark') {
+      darkAlpha = Math.min(darkAlpha + 0.15, 0.5);
+    }
+
+    this.darknessRect.setAlpha(darkAlpha);
+
+    // --- RED OVERLAY (Phaser) ---
+    this.redOverlay.setAlpha(Math.max(0, (180 - closestEnemyDist) / 180) * 0.25);
+
+    // --- Fear gauge UI ---
+    document.getElementById('fear-fill').style.width = this.brother.fearGauge + '%';
+
+    // --- Warning text ---
+    const warnEl = document.getElementById('warning-text');
+    if (closestEnemyDist < CONFIG.ENEMY_WARNING_CLOSE) {
+      warnEl.textContent = '何かが すぐ近くにいる...';
+      warnEl.style.color = 'rgba(200,50,50,0.7)';
+    } else if (closestEnemyDist < CONFIG.ENEMY_WARNING_MID) {
+      warnEl.textContent = '...気配を感じる';
+      warnEl.style.color = `rgba(160,80,80,${(CONFIG.ENEMY_WARNING_MID - closestEnemyDist) / 100})`;
+    } else if (closestEnemyDist < CONFIG.ENEMY_WARNING_FAR) {
+      warnEl.textContent = '...';
+      warnEl.style.color = `rgba(120,100,110,${(CONFIG.ENEMY_WARNING_FAR - closestEnemyDist) / 100 * 0.4})`;
+    } else {
+      warnEl.textContent = '';
+    }
+
+    // --- Hand hint ---
+    const sibDist = Phaser.Math.Distance.Between(this.sister.x, this.sister.y, this.brother.x, this.brother.y);
+    const handHint = document.getElementById('hand-hint');
+    if (!this.isHoldingHand && sibDist < CONFIG.HAND_REACH * 1.5) {
+      handHint.textContent = 'E / タップで手をつなぐ';
+    } else if (this.isHoldingHand) {
+      handHint.textContent = '手をつないでいる';
+    } else {
+      handHint.textContent = '';
+    }
+
+    // --- Goal check ---
+    let sisterAtGoal = false, brotherAtGoal = false;
+    this.goalSprites.forEach(gs => {
+      if (Phaser.Math.Distance.Between(this.sister.x, this.sister.y, gs.x, gs.y) < TILE) sisterAtGoal = true;
+      if (Phaser.Math.Distance.Between(this.brother.x, this.brother.y, gs.x, gs.y) < TILE) brotherAtGoal = true;
+    });
+
+    const goalHint = document.getElementById('goal-hint');
+    if (sisterAtGoal && !brotherAtGoal) {
+      goalHint.textContent = '弟も出口まで連れてきて！';
+      goalHint.style.display = 'block';
+    } else {
+      goalHint.style.display = 'none';
+    }
+
+    if (sisterAtGoal && brotherAtGoal && !this.cleared) {
+      this.cleared = true;
+      this.time.delayedCall(500, () => {
+        if (currentStage >= TOTAL_STAGES) {
+          document.getElementById('ending-screen').style.display = 'flex';
+        } else {
+          document.getElementById('clear-screen').style.display = 'flex';
+        }
+      });
+    }
+  }
+
+  updateLightning(time, dt) {
+    const cfg = this.stageConfig;
+
+    if (this.lightningPhase === 'idle') {
+      this.lightningTimer += dt * 1000;
+      if (this.lightningTimer >= this.lightningNextAt) {
+        this.lightningPhase = 'flash';
+        this.lightningPhaseTimer = 0;
+        this.lightningTimer = 0;
+        this.lightningNextAt = Phaser.Math.Between(cfg.LIGHTNING_INTERVAL_MIN, cfg.LIGHTNING_INTERVAL_MAX);
+      }
+    } else if (this.lightningPhase === 'flash') {
+      this.lightningPhaseTimer += dt * 1000;
+      const progress = this.lightningPhaseTimer / cfg.LIGHTNING_FLASH_DURATION;
+
+      if (progress < 0.3) {
+        this.lightningRect.setAlpha(0.8 - progress);
+        this.enemySprites.forEach(es => es.setAlpha(0.95));
+      } else if (progress < 1) {
+        this.lightningRect.setAlpha(Math.max(0, 0.5 * (1 - progress)));
+      } else {
+        this.lightningPhase = 'dark';
+        this.lightningPhaseTimer = 0;
+        this.lightningRect.setAlpha(0);
+      }
+    } else if (this.lightningPhase === 'dark') {
+      this.lightningPhaseTimer += dt * 1000;
+      if (this.lightningPhaseTimer >= cfg.LIGHTNING_DARK_DURATION) {
+        this.lightningPhase = 'idle';
+      }
+    }
+  }
+
+  updateMatchHUD() {
+    const hud = document.getElementById('match-hud');
+    if (this.matchCount > 0 || this.matchActive) {
+      hud.style.display = 'block';
+      hud.style.pointerEvents = 'auto';
+      hud.textContent = this.matchActive ? `マッチ使用中` : `マッチ: ${this.matchCount}`;
+    } else {
+      hud.style.display = 'none';
+    }
+  }
+
+  triggerGameOver() {
+    if (this.gameOver) return;
+    this.gameOver = true;
+    this.redOverlay.setAlpha(0.5);
+    this.time.delayedCall(800, () => {
+      document.getElementById('gameover-screen').style.display = 'flex';
+    });
+  }
+}
+
+// ============================================
+// Match use function
+// ============================================
+function useMatch() {
+  const scene = window._gameScene;
+  if (!scene || scene.matchCount <= 0 || scene.matchActive) return;
+  scene.matchCount--;
+  scene.matchActive = true;
+  scene.matchTimer = CONFIG.MATCH_DURATION;
+  scene.matchLightZone.radius = CONFIG.MATCH_LIGHT_RADIUS;
+  scene.matchGlow.setAlpha(0.6);
+  scene.updateMatchHUD();
+}
+
+// ============================================
+// Game lifecycle
+// ============================================
+function startGame() {
+  document.getElementById('start-screen').style.display = 'none';
+  currentStage = 1;
+  if (game) game.destroy(true);
+  game = new Phaser.Game({
+    type: Phaser.AUTO,
+    width: W,
+    height: H,
+    parent: 'game-container',
+    backgroundColor: '#0d0d1a',
+    physics: {
+      default: 'arcade',
+      arcade: { gravity: { y: 0 }, debug: false }
+    },
+    scene: GameScene,
+  });
+}
+
+function nextStage() {
+  document.getElementById('clear-screen').style.display = 'none';
+  currentStage++;
+  if (game) game.destroy(true);
+  game = new Phaser.Game({
+    type: Phaser.AUTO,
+    width: W,
+    height: H,
+    parent: 'game-container',
+    backgroundColor: '#0d0d1a',
+    physics: {
+      default: 'arcade',
+      arcade: { gravity: { y: 0 }, debug: false }
+    },
+    scene: GameScene,
+  });
+}
+
+function retryStage() {
+  document.getElementById('gameover-screen').style.display = 'none';
+  if (game) game.destroy(true);
+  game = new Phaser.Game({
+    type: Phaser.AUTO,
+    width: W,
+    height: H,
+    parent: 'game-container',
+    backgroundColor: '#0d0d1a',
+    physics: {
+      default: 'arcade',
+      arcade: { gravity: { y: 0 }, debug: false }
+    },
+    scene: GameScene,
+  });
+}
+
+function backToTitle() {
+  document.getElementById('ending-screen').style.display = 'none';
+  document.getElementById('start-screen').style.display = 'flex';
+  if (game) { game.destroy(true); game = null; }
+  initStartRain();
+}
+
+// Init on load
+initStartRain();
+</script>
+</body>
+</html>

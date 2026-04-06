@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>雨宿りの回廊</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh;
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    overflow: hidden;
+  }
+  #game-container { position: relative; touch-action: none; }
+#start-overlay {
+position: absolute; inset: 0; z-index: 200;
+background: radial-gradient(ellipse at 50% 80%, #0d0a18 0%, #050208 100%);
+display: flex; flex-direction: column; align-items: center; justify-content: center;
+transition: opacity 1.5s;
+}
+#start-overlay.hidden { opacity: 0; pointer-events: none; }
+#start-title {
+color: #c8b8d8; font-size: 32px; font-weight: bold; letter-spacing: 8px;
+text-shadow: 0 0 40px rgba(150,120,200,0.3);
+margin-bottom: 12px;
+animation: titlePulse 4s ease-in-out infinite;
+}
+@keyframes titlePulse {
+0%,100% { text-shadow: 0 0 40px rgba(150,120,200,0.2); }
+50% { text-shadow: 0 0 60px rgba(150,120,200,0.5); }
+}
+#start-sub {
+color: #6a6080; font-size: 13px; letter-spacing: 2px; margin-bottom: 36px;
+}
+#start-story {
+color: #8880a0; font-size: 13px; line-height: 2; text-align: center;
+max-width: 360px; margin-bottom: 40px; letter-spacing: 1px;
+}
+#start-story span { color: #aa99cc; }
+#start-btn {
+padding: 12px 48px; background: transparent;
+border: 1px solid rgba(180,160,220,0.4); color: #b0a0cc;
+font-size: 15px; letter-spacing: 4px; border-radius: 6px; cursor: pointer;
+transition: all 0.4s;
+}
+#start-btn:hover {
+background: rgba(150,120,200,0.15);
+border-color: rgba(180,160,220,0.7);
+text-shadow: 0 0 12px rgba(180,160,220,0.5);
+}
+.start-rain {
+position: absolute; width: 1px; background: rgba(100,120,160,0.3);
+animation: startRain linear infinite;
+}
+@keyframes startRain {
+from { transform: translateY(-20px); }
+to { transform: translateY(calc(100vh + 20px)); }
+}
+#ui-overlay {
+position: absolute; top: 10px; left: 10px; right: 10px;
+display: flex; justify-content: space-between; align-items: flex-start;
+pointer-events: none; z-index: 10;
+}
+.ui-panel {
+background: rgba(0,0,0,0.75); border: 1px solid rgba(100,140,180,0.3);
+border-radius: 8px; padding: 8px 12px; color: #c0d0e0; font-size: 12px; line-height: 1.6;
+}
+#fear-container { display: flex; align-items: center; gap: 8px; }
+#fear-bar-bg {
+width: 100px; height: 10px; background: rgba(40,40,60,0.8);
+border-radius: 5px; overflow: hidden; border: 1px solid rgba(100,100,140,0.4);
+}
+#fear-bar {
+width: 0%; height: 100%;
+background: linear-gradient(90deg, #4466aa, #aa3355);
+border-radius: 5px; transition: width 0.3s;
+}
+#hand-indicator {
+margin-top: 4px; font-size: 11px; color: #ffcc66; opacity: 0; transition: opacity 0.3s;
+}
+#hand-indicator.visible { opacity: 1; }
+#stage-indicator {
+position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+font-size: 14px; color: rgba(180,200,220,0.7); letter-spacing: 3px;
+pointer-events: none; z-index: 10;
+}
+#warning-text {
+position: absolute; bottom: 44px; left: 0; right: 0; text-align: center;
+font-size: 15px; font-weight: bold; pointer-events: none; z-index: 30;
+text-shadow: 0 0 12px rgba(255,0,0,0.7), 0 0 24px rgba(180,0,0,0.4);
+letter-spacing: 3px;
+}
+#goal-hint {
+position: absolute; bottom: 44px; left: 0; right: 0; text-align: center;
+font-size: 13px; pointer-events: none; z-index: 29;
+color: rgba(120,200,160,0); letter-spacing: 2px;
+text-shadow: 0 0 10px rgba(80,200,140,0.4);
+transition: color 0.5s;
+}
+#controls-hint {
+position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+color: rgba(150,170,200,0.5); font-size: 11px; pointer-events: none; z-index: 10; text-align: center;
+}
+#gameover-overlay {
+display: none; position: absolute; inset: 0; z-index: 100;
+background: rgba(0,0,0,0); flex-direction: column; align-items: center; justify-content: center;
+transition: background 2s;
+}
+#gameover-overlay.active { display: flex; background: rgba(5,0,10,0.92); }
+#gameover-text {
+color: #cc2244; font-size: 28px; font-weight: bold; letter-spacing: 6px;
+opacity: 0; transform: scale(0.8);
+transition: opacity 1.5s ease 0.5s, transform 1.5s ease 0.5s;
+text-shadow: 0 0 30px rgba(200,0,40,0.6);
+}
+#gameover-overlay.active #gameover-text { opacity: 1; transform: scale(1); }
+#gameover-sub {
+color: #8888aa; font-size: 14px; margin-top: 16px;
+opacity: 0; transition: opacity 1s ease 2s;
+}
+#gameover-overlay.active #gameover-sub { opacity: 1; }
+.result-btn {
+margin-top: 28px; padding: 10px 32px;
+background: transparent; font-size: 14px; border-radius: 6px; cursor: pointer;
+opacity: 0; transition: opacity 1s ease 2.5s, background 0.3s;
+pointer-events: auto;
+}
+#gameover-overlay.active .result-btn, #clear-overlay.active .result-btn { opacity: 1; }
+#retry-btn { border: 1px solid #cc2244; color: #cc2244; }
+#retry-btn:hover { background: rgba(200,30,60,0.2); }
+#clear-overlay {
+display: none; position: absolute; inset: 0; z-index: 100;
+background: rgba(0,0,0,0); flex-direction: column; align-items: center; justify-content: center;
+transition: background 2.5s;
+}
+#clear-overlay.active { display: flex; background: rgba(8,10,20,0.90); }
+#clear-text {
+color: #88ccaa; font-size: 26px; font-weight: bold; letter-spacing: 8px;
+opacity: 0; transform: translateY(20px);
+transition: opacity 2s ease 0.8s, transform 2s ease 0.8s;
+text-shadow: 0 0 30px rgba(100,200,150,0.4);
+}
+#clear-overlay.active #clear-text { opacity: 1; transform: translateY(0); }
+#clear-sub {
+color: #8899aa; font-size: 14px; margin-top: 16px; letter-spacing: 2px;
+opacity: 0; transition: opacity 1.5s ease 2s;
+}
+#clear-overlay.active #clear-sub { opacity: 1; }
+#clear-btn { border: 1px solid #88ccaa; color: #88ccaa; }
+#clear-btn:hover { background: rgba(100,200,150,0.15); }
+#transition-overlay {
+display: none; position: absolute; inset: 0; z-index: 150;
+background: rgba(0,0,0,0); flex-direction: column; align-items: center; justify-content: center;
+transition: background 1s;
+}
+#transition-overlay.active { display: flex; background: rgba(5,5,15,0.95); }
+#transition-text {
+color: #aabbcc; font-size: 22px; font-weight: bold; letter-spacing: 6px;
+opacity: 0; transition: opacity 1.5s ease 0.3s;
+text-shadow: 0 0 20px rgba(100,150,200,0.3);
+}
+#transition-overlay.active #transition-text { opacity: 1; }
+#transition-sub {
+color: #667788; font-size: 13px; margin-top: 12px; letter-spacing: 2px;
+opacity: 0; transition: opacity 1s ease 1s;
+}
+#transition-overlay.active #transition-sub { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="start-overlay">
+    <div id="start-title">雨宿りの回廊</div>
+    <div id="start-sub">─ あめやどりのかいろう ─</div>
+    <div id="start-story">
+      雨の夜、無人の商店街。<br>
+      お母さんとはぐれた姉弟は、<br>
+      <span>出口</span>を目指して暗闇を進む。<br><br>
+      影が、追ってくる。<br>
+      <span>街灯</span>の光だけが頼り。<br>
+      弟の手を離さないで。
+    </div>
+    <button id="start-btn" onclick="startGame()">はじめる</button>
+  </div>
+  <div id="ui-overlay" style="display:none;">
+    <div class="ui-panel">
+      <div>姉: <span id="sister-status">待機中</span></div>
+      <div id="hand-indicator">🤝 手をつなげます (E)</div>
+    </div>
+    <div class="ui-panel">
+      <div id="fear-container">
+        弟の恐怖:
+        <div id="fear-bar-bg"><div id="fear-bar"></div></div>
+        <span id="fear-value">0%</span>
+      </div>
+      <div>弟: <span id="brother-status">追従中</span></div>
+    </div>
+  </div>
+  <div id="stage-indicator" style="display:none;"></div>
+  <div id="warning-text"></div>
+  <div id="goal-hint"></div>
+  <div id="controls-hint" style="display:none;">WASD / 矢印キー で移動 ｜ タップで移動 ｜ 弟の近くで E / タップ → 手をつなぐ</div>
+  <div id="gameover-overlay">
+    <div id="gameover-text">闇に 呑まれた</div>
+    <div id="gameover-sub">影がふたりを包み込んだ...</div>
+    <button class="result-btn" id="retry-btn" onclick="retryStage()">もう一度</button>
+  </div>
+  <div id="clear-overlay">
+    <div id="clear-text">─ 回廊を抜けた ─</div>
+    <div id="clear-sub">ふたりは、雨の向こうに光を見つけた。</div>
+    <button class="result-btn" id="clear-btn" onclick="location.reload()">もう一度遊ぶ</button>
+  </div>
+  <div id="transition-overlay">
+    <div id="transition-text"></div>
+    <div id="transition-sub"></div>
+  </div>
+</div>
+<script>
+// ============================================
+// CONFIG — 全定数・バランス値
+// ============================================
+const W = Math.min(800, window.innerWidth);
+const H = Math.min(600, window.innerHeight - 20);
+const TILE = 32;
+const COLS = Math.floor(W / TILE);
+const ROWS = Math.floor(H / TILE);
+
+const CONFIG = {
+  // 姉弟
+  SISTER_SPEED: 150,
+  BROTHER_SPEED_LIT: 110,
+  BROTHER_SPEED_DARK: 50,
+  BROTHER_SPEED_HOLDING: 135,
+
+  // 手つなぎ
+  HAND_REACH: 50,
+  HAND_BREAK: 80,
+
+  // 恐怖ゲージ
+  FEAR_RATE_LIT: -15,
+  FEAR_RATE_DARK: 12,
+  FEAR_ENEMY_MAX: 25,
+  FEAR_ENEMY_RANGE: 200,
+  FEAR_HOLDING_BONUS: -10,
+  FEAR_FREEZE_THRESHOLD: 100,
+  FEAR_UNFREEZE_THRESHOLD: 60,
+
+  // 敵
+  ENEMY_SPEED_FAR: 38,
+  ENEMY_SPEED_NEAR: 28,
+  ENEMY_SPEED_THRESHOLD: 200,
+  ENEMY_KILL_DIST: 30,
+  ENEMY_LIGHT_REPEL_THRESHOLD: 0.3,
+  ENEMY_LIGHT_REPEL_STRENGTH: 80,
+
+  // 光源
+  STREETLIGHT_RADIUS: 70,
+  MIRROR_RADIUS: 60,
+  MIRROR_ACTIVATE_DIST: 120,
+  GOAL_LIGHT_RADIUS: 60,
+
+  // 演出
+  ENEMY_WARNING_CLOSE: 100,
+  ENEMY_WARNING_MID: 180,
+  ENEMY_WARNING_FAR: 260,
+  DARKNESS_BASE: 0.72,
+  DARKNESS_ENEMY_BONUS: 0.18,
+
+  // 雨
+  RAIN_COUNT: 120,
+  RAIN_SPEED_MIN: 300,
+  RAIN_SPEED_MAX: 600,
+  RAIN_WIND_X: -30,
+  RIPPLE_COUNT: 15,
+};
+
+// ステージ2 CONFIG上書き
+const STAGE2_OVERRIDES = {
+  STREETLIGHT_RADIUS: 45,
+  MIRROR_RADIUS: 40,
+  GOAL_LIGHT_RADIUS: 50,
+  ENEMY_SPEED_FAR: 44,
+  ENEMY_SPEED_NEAR: 34,
+  DARKNESS_BASE: 0.80,
+  DARKNESS_ENEMY_BONUS: 0.15,
+  RAIN_COUNT: 200,
+  RAIN_SPEED_MIN: 450,
+  RAIN_SPEED_MAX: 800,
+  RAIN_WIND_X: -100,
+  RIPPLE_COUNT: 10,
+};
+
+// タイル定数
+const TILE_FLOOR = 0;
+const TILE_WALL = 1;
+const TILE_STREETLIGHT = 2;
+const TILE_MIRROR = 3;
+const TILE_SHOP = 4;
+const TILE_GOAL = 5;
+
+// ============================================
+// MAP — ステージ定義
+// ============================================
+
+function generateStage1() {
+  const map = [];
+  const midC = Math.floor(COLS / 2);
+  for (let r = 0; r < ROWS; r++) {
+    map[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      // 上壁（ゴール穴あき: 中央3タイル）
+      if (r === 0) {
+        if (c >= midC - 1 && c <= midC + 1) map[r][c] = TILE_GOAL;
+        else map[r][c] = TILE_WALL;
+      }
+      // 下壁・左壁・右壁
+      else if (r === ROWS - 1 || c === 0 || c === COLS - 1) {
+        map[r][c] = TILE_WALL;
+      }
+      // 上側の商店街（row 3-4）
+      else if (r === 3 && c > 2 && c < COLS - 3 && c % 4 === 0) map[r][c] = TILE_SHOP;
+      else if (r === 4 && c > 2 && c < COLS - 3 && c % 4 !== 2) map[r][c] = TILE_SHOP;
+      // 下側の商店街
+      else if (r === ROWS - 5 && c > 2 && c < COLS - 3 && c % 4 === 0) map[r][c] = TILE_SHOP;
+      else if (r === ROWS - 4 && c > 2 && c < COLS - 3 && c % 4 !== 2) map[r][c] = TILE_SHOP;
+      // 街灯
+      else if ((r === 8 || r === 10) && c % 6 === 3 && c > 1 && c < COLS - 2) map[r][c] = TILE_STREETLIGHT;
+      // ミラー
+      else if (r === 9 && (c === 7 || c === 15)) map[r][c] = TILE_MIRROR;
+      // 床
+      else map[r][c] = TILE_FLOOR;
+    }
+  }
+  return map;
+}
+
+function getStage1Positions() {
+  const midC = Math.floor(COLS / 2);
+  return {
+    sister: { x: midC * TILE, y: (ROWS - 3) * TILE },
+    brother: { x: midC * TILE, y: (ROWS - 2) * TILE },
+    enemies: [{ x: midC * TILE, y: 3 * TILE }],
+  };
+}
+
+function generateStage2() {
+  const map = [];
+  const midC = Math.floor(COLS / 2);
+  for (let r = 0; r < ROWS; r++) {
+    map[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      // 上壁（ゴール穴あき: 中央3タイル）
+      if (r === 0) {
+        if (c >= midC - 1 && c <= midC + 1) map[r][c] = TILE_GOAL;
+        else map[r][c] = TILE_WALL;
+      }
+      // 下壁・左壁・右壁
+      else if (r === ROWS - 1 || c === 0 || c === COLS - 1) {
+        map[r][c] = TILE_WALL;
+      }
+      // 障害物ブロック: 左上
+      else if ((r === 3 || r === 4) && c >= 3 && c <= 6) map[r][c] = TILE_SHOP;
+      // 障害物ブロック: 右上
+      else if ((r === 3 || r === 4) && c >= COLS - 7 && c <= COLS - 4) map[r][c] = TILE_SHOP;
+      // 中央の横壁（隙間あり）
+      else if (r === 7 && c > 1 && c < COLS - 2 && c !== midC && c !== midC - 3 && c !== midC + 3) map[r][c] = TILE_SHOP;
+      // 下寄り障害物
+      else if ((r === ROWS - 5 || r === ROWS - 6) && c >= 4 && c <= 7) map[r][c] = TILE_SHOP;
+      else if ((r === ROWS - 5 || r === ROWS - 6) && c >= COLS - 8 && c <= COLS - 5) map[r][c] = TILE_SHOP;
+      // 街灯（少なめ: 3箇所のみ）
+      else if (r === 5 && c === midC) map[r][c] = TILE_STREETLIGHT;
+      else if (r === 10 && c === 4) map[r][c] = TILE_STREETLIGHT;
+      else if (r === 10 && c === COLS - 5) map[r][c] = TILE_STREETLIGHT;
+      // ミラー（1つだけ）
+      else if (r === 9 && c === midC) map[r][c] = TILE_MIRROR;
+      // 床
+      else map[r][c] = TILE_FLOOR;
+    }
+  }
+  return map;
+}
+
+function getStage2Positions() {
+  const midC = Math.floor(COLS / 2);
+  return {
+    sister: { x: midC * TILE, y: (ROWS - 3) * TILE },
+    brother: { x: midC * TILE, y: (ROWS - 2) * TILE },
+    enemies: [
+      { x: 4 * TILE, y: 4 * TILE },
+      { x: (COLS - 5) * TILE, y: 4 * TILE },
+    ],
+  };
+}
+
+// ============================================
+// GAME STATE
+// ============================================
+let currentStage = 1;
+let fearGauge = 0, isHoldingHand = false, touchTarget = null;
+let isGameOver = false, isCleared = false, gameStarted = false;
+let siblingDist = 0;
+
+// Active config (can be overridden per stage)
+let activeConfig = {};
+function resetActiveConfig() {
+  activeConfig = Object.assign({}, CONFIG);
+}
+resetActiveConfig();
+
+// Scene-level references
+let sister, brother, cursors, keyW, keyA, keyS, keyD, keyE;
+let walls, streetlights, mirrors;
+let darkness, redOverlay;
+let rainParticles = [], ripples = [], windStreaks = [];
+let streetlightGlows = [], lightZones = [];
+let handLinkDots = [];
+let goalZones = [], goalGlows = [];
+
+// Multi-enemy support
+let enemies = []; // Array of {x, y, timer, sprite, shadowRipples, rippleTimer}
+
+let currentScene = null;
+
+// ============================================
+// START SCREEN RAIN
+// ============================================
+(function addStartRain() {
+  const overlay = document.getElementById('start-overlay');
+  for (let i = 0; i < 40; i++) {
+    const r = document.createElement('div');
+    r.className = 'start-rain';
+    r.style.left = Math.random()*100 + '%';
+    r.style.height = (Math.random()*15 + 5) + 'px';
+    r.style.animationDuration = (Math.random()*0.8 + 0.4) + 's';
+    r.style.animationDelay = (Math.random()*2) + 's';
+    overlay.appendChild(r);
+  }
+})();
+
+// ============================================
+// PHASER CONFIG
+// ============================================
+const config = {
+  type: Phaser.AUTO, width: W, height: H,
+  parent: 'game-container', backgroundColor: '#0a0a12',
+  physics: { default: 'arcade', arcade: { debug: false } },
+  scene: { preload, create, update }
+};
+const game = new Phaser.Game(config);
+
+function startGame() {
+  gameStarted = true;
+  document.getElementById('start-overlay').classList.add('hidden');
+  document.getElementById('ui-overlay').style.display = 'flex';
+  document.getElementById('controls-hint').style.display = 'block';
+  showStageIndicator();
+}
+
+function retryStage() {
+  // Reload to retry current stage
+  location.reload();
+}
+
+function showStageIndicator() {
+  const el = document.getElementById('stage-indicator');
+  if (currentStage === 1) {
+    el.textContent = 'Stage 1 ─ 雨の商店街';
+  } else {
+    el.textContent = 'Stage 2 ─ 台風接近';
+  }
+  el.style.display = 'block';
+  el.style.opacity = '0.8';
+  setTimeout(() => { el.style.transition = 'opacity 3s'; el.style.opacity = '0'; }, 3000);
+}
+
+// ============================================
+// TEXTURES
+// ============================================
+function preload() {
+  const g = this.make.graphics({ x: 0, y: 0, add: false });
+
+  // floor
+  g.clear(); g.fillStyle(0x1a1a2e); g.fillRect(0,0,TILE,TILE);
+  g.fillStyle(0x16162a); g.fillRect(0,0,TILE,1); g.fillRect(0,0,1,TILE);
+  g.fillStyle(0x1e1e34); g.fillRect(2,2,TILE-4,TILE-4);
+  g.generateTexture('floor', TILE, TILE);
+
+  // wall
+  g.clear(); g.fillStyle(0x2a2a3e); g.fillRect(0,0,TILE,TILE);
+  g.fillStyle(0x333350); g.fillRect(2,2,TILE-4,TILE-4);
+  g.generateTexture('wall', TILE, TILE);
+
+  // shop
+  g.clear(); g.fillStyle(0x2e2438); g.fillRect(0,0,TILE,TILE);
+  g.fillStyle(0x3a2e48); g.fillRect(2,2,TILE-4,TILE-4);
+  g.generateTexture('shop', TILE, TILE);
+
+  // streetlight
+  g.clear(); g.fillStyle(0x1a1a2e); g.fillRect(0,0,TILE,TILE);
+  g.fillStyle(0x555566); g.fillRect(14,8,4,20);
+  g.fillStyle(0xffdd88); g.fillRect(10,4,12,6);
+  g.generateTexture('streetlight', TILE, TILE);
+
+  // mirror
+  g.clear(); g.fillStyle(0x1a1a2e); g.fillRect(0,0,TILE,TILE);
+  g.fillStyle(0x5577aa); g.fillRect(6,4,20,24);
+  g.fillStyle(0x88aadd); g.fillRect(8,6,16,20);
+  g.generateTexture('mirror', TILE, TILE);
+
+  // goal (light leak from top)
+  g.clear(); g.fillStyle(0x1a2a1e); g.fillRect(0,0,TILE,TILE);
+  g.fillStyle(0x2a4a30); g.fillRect(2,2,TILE-4,TILE-4);
+  g.fillStyle(0xddcc88, 0.4); g.fillRect(4,0,TILE-8,8);
+  g.fillStyle(0xeedd99, 0.6); g.fillRect(8,0,TILE-16,4);
+  g.generateTexture('goal', TILE, TILE);
+
+  // goalglow
+  g.clear();
+  for (let i = 40; i > 0; i--) {
+    g.fillStyle(0xeeddaa, (1-i/40)*0.3);
+    g.fillCircle(64,64,(i/40)*64);
+  }
+  g.generateTexture('goalglow', 128, 128);
+
+  // sister
+  g.clear(); g.fillStyle(0xe08040); g.fillRect(8,4,16,12);
+  g.fillStyle(0xcc6633); g.fillRect(6,16,20,12);
+  g.fillStyle(0xffaa66); g.fillRect(10,6,4,4); g.fillRect(18,6,4,4);
+  g.generateTexture('sister', TILE, TILE);
+
+  // brother
+  g.clear(); g.fillStyle(0x4488cc); g.fillRect(10,6,12,10);
+  g.fillStyle(0x3366aa); g.fillRect(8,16,16,10);
+  g.fillStyle(0x66aaee); g.fillRect(12,8,3,3); g.fillRect(17,8,3,3);
+  g.generateTexture('brother', TILE, TILE);
+
+  // streetglow
+  g.clear();
+  for (let i = 32; i > 0; i--) {
+    g.fillStyle(0xffddaa, (1-i/32)*0.35);
+    g.fillCircle(80,80,(i/32)*80);
+  }
+  g.generateTexture('streetglow', 160, 160);
+
+  // rain
+  g.clear(); g.fillStyle(0x6688bb, 0.6); g.fillRect(0,0,2,8);
+  g.generateTexture('rain', 2, 8);
+
+  // ripple
+  g.clear(); g.lineStyle(1, 0x5577aa, 0.4); g.strokeCircle(8,8,6);
+  g.generateTexture('ripple', 16, 16);
+
+  // wind streak (Stage 2)
+  g.clear(); g.fillStyle(0x8899bb, 0.2); g.fillRect(0,0,30,1);
+  g.generateTexture('wind_streak', 30, 1);
+
+  // shadow_enemy
+  const ES = 64; g.clear();
+  for (let i = 30; i > 0; i--) {
+    g.fillStyle(0x110022, (1-i/30)*0.5);
+    g.fillCircle(ES/2, ES/2, (i/30)*ES/2);
+  }
+  g.fillStyle(0x08000f, 0.9);
+  g.fillEllipse(ES/2, ES/2+4, 20, 40);
+  g.fillCircle(ES/2, ES/2-16, 10);
+  g.fillRect(ES/2-16, ES/2-4, 8, 3);
+  g.fillRect(ES/2+8, ES/2-2, 8, 3);
+  g.fillStyle(0x661133, 0.8);
+  g.fillCircle(ES/2-3, ES/2-17, 2);
+  g.fillCircle(ES/2+3, ES/2-17, 2);
+  g.generateTexture('shadow_enemy', ES, ES);
+
+  // dark_ripple
+  g.clear();
+  g.lineStyle(2, 0x442255, 0.6); g.strokeCircle(16,16,12);
+  g.lineStyle(1, 0x6633aa, 0.3); g.strokeCircle(16,16,8);
+  g.generateTexture('dark_ripple', 32, 32);
+
+  // hand_dot
+  g.clear(); g.fillStyle(0xffcc66, 0.8); g.fillRect(0,0,4,4);
+  g.generateTexture('hand_dot', 4, 4);
+
+  g.destroy();
+}
+
+// ============================================
+// LIGHT SYSTEM
+// ============================================
+function isInLight(x, y) {
+  for (const z of lightZones) {
+    if (z.radius > 0 && Phaser.Math.Distance.Between(x, y, z.x, z.y) < z.radius) return true;
+  }
+  return false;
+}
+
+function getLightLevel(x, y) {
+  let lv = 0;
+  for (const z of lightZones) {
+    if (z.radius > 0) {
+      lv += Math.max(0, 1 - Phaser.Math.Distance.Between(x, y, z.x, z.y) / z.radius) * 0.6;
+    }
+  }
+  return Math.min(lv, 1);
+}
+
+// ============================================
+// STAGE BUILDING
+// ============================================
+function buildStage(scene) {
+  currentScene = scene;
+
+  // Clear previous stage objects
+  if (walls) walls.clear(true, true);
+  if (mirrors) mirrors.clear(true, true);
+  streetlights = [];
+  streetlightGlows.forEach(g => g.destroy());
+  streetlightGlows = [];
+  lightZones = [];
+  goalZones = [];
+  goalGlows.forEach(g => g.destroy());
+  goalGlows = [];
+  enemies.forEach(e => {
+    e.sprite.destroy();
+    e.shadowRipples.forEach(r => r.destroy());
+  });
+  enemies = [];
+  rainParticles.forEach(r => r.destroy());
+  rainParticles = [];
+  ripples.forEach(r => r.destroy());
+  ripples = [];
+  windStreaks.forEach(w => w.destroy());
+  windStreaks = [];
+  handLinkDots.forEach(d => d.destroy());
+  handLinkDots = [];
+
+  // Apply config overrides for stage
+  resetActiveConfig();
+  if (currentStage === 2) {
+    Object.assign(activeConfig, STAGE2_OVERRIDES);
+  }
+
+  // Generate map
+  const MAP = currentStage === 1 ? generateStage1() : generateStage2();
+  const positions = currentStage === 1 ? getStage1Positions() : getStage2Positions();
+
+  walls = scene.physics.add.staticGroup();
+  mirrors = scene.physics.add.staticGroup();
+
+  // Destroy old map tiles
+  scene.children.list.filter(c => c.texture && ['floor','wall','shop','streetlight','mirror','goal'].includes(c.texture.key) && !c.body)
+    .forEach(c => c.destroy());
+
+  // Build tiles
+  let slGlowIdx = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
+      const t = MAP[r][c];
+      if (t === TILE_FLOOR) {
+        scene.add.image(x, y, 'floor').setDepth(0);
+      } else if (t === TILE_WALL) {
+        scene.add.image(x, y, 'wall').setDepth(0);
+        walls.create(x, y, 'wall').setSize(TILE, TILE).refreshBody();
+      } else if (t === TILE_STREETLIGHT) {
+        scene.add.image(x, y, 'streetlight').setDepth(0);
+        streetlights.push({ x, y });
+        const gl = scene.add.image(x, y - 4, 'streetglow').setAlpha(0.5).setBlendMode(Phaser.BlendModes.ADD).setDepth(5);
+        streetlightGlows.push(gl);
+        lightZones.push({ x, y, radius: activeConfig.STREETLIGHT_RADIUS, baseAlpha: 0.5, glow: gl, slIdx: slGlowIdx++ });
+      } else if (t === TILE_MIRROR) {
+        scene.add.image(x, y, 'mirror').setDepth(0);
+        const m = mirrors.create(x, y, 'mirror').setSize(TILE, TILE).refreshBody();
+        m.isReflecting = false;
+        lightZones.push({ x, y, radius: 0, baseAlpha: 0.4, mirror: m });
+      } else if (t === TILE_SHOP) {
+        scene.add.image(x, y, 'shop').setDepth(0);
+        walls.create(x, y, 'shop').setSize(TILE, TILE).refreshBody();
+      } else if (t === TILE_GOAL) {
+        scene.add.image(x, y, 'goal').setDepth(0);
+        const gg = scene.add.image(x, y, 'goalglow').setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.35).setDepth(5);
+        goalGlows.push(gg);
+        goalZones.push({ x, y });
+        lightZones.push({ x, y, radius: activeConfig.GOAL_LIGHT_RADIUS, baseAlpha: 0.35, goalGlow: gg });
+      }
+    }
+  }
+
+  // Position sister & brother
+  if (!sister) {
+    sister = scene.physics.add.sprite(positions.sister.x, positions.sister.y, 'sister').setCollideWorldBounds(true).setDepth(10);
+    brother = scene.physics.add.sprite(positions.brother.x, positions.brother.y, 'brother').setCollideWorldBounds(true).setDepth(10);
+    brother.fearFrozen = false;
+  } else {
+    sister.setPosition(positions.sister.x, positions.sister.y).setVelocity(0, 0).setAlpha(1);
+    brother.setPosition(positions.brother.x, positions.brother.y).setVelocity(0, 0).setAlpha(1).clearTint();
+    brother.fearFrozen = false;
+  }
+  scene.physics.add.collider(sister, walls);
+  scene.physics.add.collider(sister, mirrors);
+  scene.physics.add.collider(brother, walls);
+  scene.physics.add.collider(brother, mirrors);
+
+  // Enemies
+  positions.enemies.forEach((ePos, idx) => {
+    const sprite = scene.add.image(ePos.x, ePos.y, 'shadow_enemy').setDepth(9).setAlpha(0.85);
+    const shadowRipples = [];
+    for (let i = 0; i < 6; i++) {
+      const dr = scene.add.image(0, 0, 'dark_ripple').setAlpha(0).setDepth(3);
+      dr.life = 0; dr.maxLife = 80; dr.active = false;
+      shadowRipples.push(dr);
+    }
+    enemies.push({
+      x: ePos.x, y: ePos.y,
+      timer: idx * 1.5, // offset so enemies don't weave in sync
+      sprite: sprite,
+      shadowRipples: shadowRipples,
+      rippleTimer: 0,
+    });
+  });
+
+  // Darkness & red overlay
+  if (!darkness) {
+    darkness = scene.add.rectangle(W / 2, H / 2, W, H, 0x000011, activeConfig.DARKNESS_BASE).setDepth(4);
+    redOverlay = scene.add.rectangle(W / 2, H / 2, W, H, 0xff0000, 0).setDepth(15);
+  } else {
+    darkness.setAlpha(activeConfig.DARKNESS_BASE);
+    redOverlay.setAlpha(0);
+  }
+
+  // Hand link dots
+  for (let i = 0; i < 8; i++) {
+    handLinkDots.push(scene.add.image(0, 0, 'hand_dot').setAlpha(0).setDepth(11));
+  }
+
+  // Rain particles
+  const rainCount = activeConfig.RAIN_COUNT;
+  for (let i = 0; i < rainCount; i++) {
+    const drop = scene.add.image(Phaser.Math.Between(0, W), Phaser.Math.Between(-H, 0), 'rain')
+      .setAlpha(Phaser.Math.FloatBetween(0.2, 0.5)).setDepth(20);
+    drop.speedY = Phaser.Math.Between(activeConfig.RAIN_SPEED_MIN, activeConfig.RAIN_SPEED_MAX);
+    drop.speedX = activeConfig.RAIN_WIND_X;
+    rainParticles.push(drop);
+  }
+
+  // Ripples
+  for (let i = 0; i < activeConfig.RIPPLE_COUNT; i++) {
+    const rip = scene.add.image(Phaser.Math.Between(TILE, W - TILE), Phaser.Math.Between(TILE, H - TILE), 'ripple').setAlpha(0).setDepth(3);
+    rip.timer = Phaser.Math.Between(0, 200);
+    ripples.push(rip);
+  }
+
+  // Wind streaks (Stage 2 only)
+  if (currentStage === 2) {
+    for (let i = 0; i < 25; i++) {
+      const ws = scene.add.image(
+        Phaser.Math.Between(0, W),
+        Phaser.Math.Between(0, H),
+        'wind_streak'
+      ).setAlpha(0).setDepth(19);
+      ws.life = Phaser.Math.Between(0, 100);
+      windStreaks.push(ws);
+    }
+  }
+
+  // Reset state
+  fearGauge = 0;
+  isHoldingHand = false;
+  touchTarget = null;
+  isGameOver = false;
+  isCleared = false;
+}
+
+// ============================================
+// CREATE
+// ============================================
+function create() {
+  currentScene = this;
+
+  // Build stage 1
+  buildStage(this);
+
+  cursors = this.input.keyboard.createCursorKeys();
+  keyW = this.input.keyboard.addKey('W');
+  keyA = this.input.keyboard.addKey('A');
+  keyS = this.input.keyboard.addKey('S');
+  keyD = this.input.keyboard.addKey('D');
+  keyE = this.input.keyboard.addKey('E');
+
+  this.input.on('pointerdown', (p) => {
+    if (isGameOver || isCleared || !gameStarted) return;
+    const bDist = Phaser.Math.Distance.Between(p.x, p.y, brother.x, brother.y);
+    if (bDist < 50 && siblingDist < activeConfig.HAND_REACH) { isHoldingHand = !isHoldingHand; return; }
+    touchTarget = { x: p.x, y: p.y };
+  });
+  this.input.on('pointermove', (p) => { if (p.isDown && !isGameOver && !isCleared && gameStarted) touchTarget = { x: p.x, y: p.y }; });
+  this.input.on('pointerup', () => { touchTarget = null; });
+}
+
+// ============================================
+// GAME OVER / CLEAR / TRANSITION
+// ============================================
+function triggerGameOver(scene) {
+  isGameOver = true;
+  sister.setVelocity(0, 0); brother.setVelocity(0, 0);
+  redOverlay.setAlpha(0.6);
+  scene.tweens.add({ targets: redOverlay, alpha: 0.1, duration: 2000, ease: 'Cubic.easeOut' });
+  // Enlarge the nearest enemy
+  const nearest = enemies.reduce((a, b) => {
+    const da = Phaser.Math.Distance.Between(sister.x, sister.y, a.x, a.y);
+    const db = Phaser.Math.Distance.Between(sister.x, sister.y, b.x, b.y);
+    return da < db ? a : b;
+  });
+  scene.tweens.add({ targets: nearest.sprite, scaleX: 3, scaleY: 3, alpha: 0.95, duration: 1500, ease: 'Cubic.easeIn' });
+  scene.tweens.add({ targets: [sister, brother], alpha: 0, duration: 2000, delay: 500 });
+  setTimeout(() => document.getElementById('gameover-overlay').classList.add('active'), 800);
+}
+
+function triggerClear(scene) {
+  isCleared = true;
+  sister.setVelocity(0, 0); brother.setVelocity(0, 0);
+
+  if (currentStage === 1) {
+    // Stage 1 clear -> transition to stage 2
+    const warmOverlay = scene.add.rectangle(W / 2, H / 2, W, H, 0xffeedd, 0).setDepth(16);
+    scene.tweens.add({ targets: warmOverlay, alpha: 0.5, duration: 2000, ease: 'Cubic.easeIn' });
+    scene.tweens.add({ targets: darkness, alpha: 0, duration: 1500 });
+    enemies.forEach(e => scene.tweens.add({ targets: e.sprite, alpha: 0, duration: 1200 }));
+
+    setTimeout(() => {
+      // Show transition overlay
+      const transEl = document.getElementById('transition-overlay');
+      const transText = document.getElementById('transition-text');
+      const transSub = document.getElementById('transition-sub');
+      transText.textContent = 'Stage 2 ─ 台風接近';
+      transSub.textContent = '風が強まる。光が、弱まっていく...';
+      transEl.classList.add('active');
+
+      setTimeout(() => {
+        // Clean up warmOverlay
+        warmOverlay.destroy();
+
+        // Advance to stage 2
+        currentStage = 2;
+        // Destroy all old map images
+        scene.children.list
+          .filter(c => c.type === 'Image' && c.texture && ['floor','wall','shop','streetlight','mirror','goal'].includes(c.texture.key))
+          .forEach(c => c.destroy());
+
+        buildStage(scene);
+
+        // Hide transition
+        transEl.classList.remove('active');
+        transEl.style.display = 'none';
+        setTimeout(() => { transEl.style.display = ''; }, 100);
+
+        showStageIndicator();
+        isCleared = false;
+      }, 3500);
+    }, 2000);
+  } else {
+    // Stage 2 clear -> final ending
+    const warmOverlay = scene.add.rectangle(W / 2, H / 2, W, H, 0xffeedd, 0).setDepth(16);
+    scene.tweens.add({ targets: warmOverlay, alpha: 0.6, duration: 2500, ease: 'Cubic.easeIn' });
+    scene.tweens.add({ targets: darkness, alpha: 0, duration: 2000 });
+    enemies.forEach(e => scene.tweens.add({ targets: e.sprite, alpha: 0, duration: 1500 }));
+
+    const clearText = document.getElementById('clear-text');
+    const clearSub = document.getElementById('clear-sub');
+    clearText.textContent = '─ 嵐を越えて ─';
+    clearSub.textContent = '雨が止み、朝の光がふたりを包んだ。お母さんの声が聞こえる。';
+    setTimeout(() => document.getElementById('clear-overlay').classList.add('active'), 1200);
+  }
+}
+
+// ============================================
+// UPDATE
+// ============================================
+function update(time, delta) {
+  if (isGameOver || isCleared || !gameStarted) return;
+  const dt = delta / 1000;
+  const speed = activeConfig.SISTER_SPEED;
+
+  // --- SISTER INPUT ---
+  let vx = 0, vy = 0;
+  if (cursors.left.isDown || keyA.isDown) vx = -1;
+  else if (cursors.right.isDown || keyD.isDown) vx = 1;
+  if (cursors.up.isDown || keyW.isDown) vy = -1;
+  else if (cursors.down.isDown || keyS.isDown) vy = 1;
+  if (touchTarget && vx === 0 && vy === 0) {
+    const dx = touchTarget.x - sister.x, dy = touchTarget.y - sister.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d > 8) { vx = dx / d; vy = dy / d; } else touchTarget = null;
+  }
+  if (vx && vy) { const l = Math.sqrt(vx * vx + vy * vy); vx /= l; vy /= l; }
+  sister.setVelocity(vx * speed, vy * speed);
+  document.getElementById('sister-status').textContent = (vx || vy) ? '移動中' : '待機中';
+
+  // --- HAND HOLDING ---
+  siblingDist = Phaser.Math.Distance.Between(sister.x, sister.y, brother.x, brother.y);
+  if (Phaser.Input.Keyboard.JustDown(keyE)) {
+    if (isHoldingHand) isHoldingHand = false;
+    else if (siblingDist < activeConfig.HAND_REACH) isHoldingHand = true;
+  }
+  if (isHoldingHand && siblingDist > activeConfig.HAND_BREAK) isHoldingHand = false;
+  document.getElementById('hand-indicator').classList.toggle('visible',
+    !isHoldingHand && siblingDist < activeConfig.HAND_REACH && !brother.fearFrozen);
+
+  // Hand link dots
+  if (isHoldingHand) {
+    for (let i = 0; i < handLinkDots.length; i++) {
+      const t = (i + 1) / (handLinkDots.length + 1);
+      handLinkDots[i].setPosition(
+        Phaser.Math.Linear(sister.x, brother.x, t),
+        Phaser.Math.Linear(sister.y, brother.y, t) + Math.sin(time / 200 + i * 0.8) * 2
+      ).setAlpha(0.6);
+    }
+  } else {
+    handLinkDots.forEach(d => d.setAlpha(0));
+  }
+
+  // --- MIRROR UPDATE ---
+  lightZones.forEach(z => {
+    if (z.mirror) {
+      const d = Phaser.Math.Distance.Between(sister.x, sister.y, z.x, z.y);
+      z.radius = d < activeConfig.MIRROR_ACTIVATE_DIST ? activeConfig.MIRROR_RADIUS : 0;
+      z.mirror.isReflecting = d < activeConfig.MIRROR_ACTIVATE_DIST;
+    }
+  });
+
+  // --- BROTHER AI ---
+  const brotherInLight = isInLight(brother.x, brother.y);
+  if (!brother.fearFrozen) {
+    let tx, ty;
+    if (isHoldingHand) {
+      const a = Math.atan2(sister.y - brother.y, sister.x - brother.x);
+      tx = sister.x - Math.cos(a) * 28;
+      ty = sister.y - Math.sin(a) * 28;
+    } else {
+      tx = sister.x; ty = sister.y;
+    }
+    const dx = tx - brother.x, dy = ty - brother.y, d = Math.sqrt(dx * dx + dy * dy);
+    const bs = isHoldingHand ? activeConfig.BROTHER_SPEED_HOLDING :
+      (brotherInLight ? activeConfig.BROTHER_SPEED_LIT : activeConfig.BROTHER_SPEED_DARK);
+    if (d > 20) brother.setVelocity((dx / d) * bs, (dy / d) * bs);
+    else brother.setVelocity(0, 0);
+  } else {
+    brother.setVelocity(0, 0);
+  }
+
+  // --- ENEMY UPDATE (all enemies) ---
+  // Find closest enemy distance to sister for fear/effects
+  let closestEnemyDist = 9999;
+  let closestEnemyX = 0, closestEnemyY = 0;
+
+  enemies.forEach(enemy => {
+    // Target selection
+    let chaseX = sister.x, chaseY = sister.y;
+    if (brother.fearFrozen) { chaseX = brother.x; chaseY = brother.y; }
+
+    // Weave
+    enemy.timer += dt;
+    const weaveX = Math.sin(enemy.timer * 1.2) * 15;
+    const weaveY = Math.cos(enemy.timer * 0.9) * 12;
+
+    // Chase
+    const edx = (chaseX + weaveX) - enemy.x;
+    const edy = (chaseY + weaveY) - enemy.y;
+    const ed = Math.sqrt(edx * edx + edy * edy);
+    const chaseSpeed = ed > activeConfig.ENEMY_SPEED_THRESHOLD ? activeConfig.ENEMY_SPEED_FAR : activeConfig.ENEMY_SPEED_NEAR;
+    if (ed > 5) {
+      enemy.x += (edx / ed) * chaseSpeed * dt;
+      enemy.y += (edy / ed) * chaseSpeed * dt;
+    }
+
+    // Light repel
+    const ell = getLightLevel(enemy.x, enemy.y);
+    if (ell > activeConfig.ENEMY_LIGHT_REPEL_THRESHOLD) {
+      const repelStr = ell * activeConfig.ENEMY_LIGHT_REPEL_STRENGTH;
+      let nLX = enemy.x, nLY = enemy.y, nLD = 9999;
+      for (const z of lightZones) {
+        if (z.radius <= 0) continue;
+        const ld = Phaser.Math.Distance.Between(enemy.x, enemy.y, z.x, z.y);
+        if (ld < nLD) { nLD = ld; nLX = z.x; nLY = z.y; }
+      }
+      if (nLD < 9999) {
+        const ax = enemy.x - nLX, ay = enemy.y - nLY, ad = Math.sqrt(ax * ax + ay * ay) || 1;
+        enemy.x += (ax / ad) * repelStr * dt;
+        enemy.y += (ay / ad) * repelStr * dt;
+      }
+    }
+
+    // Clamp
+    enemy.x = Phaser.Math.Clamp(enemy.x, TILE * 2, W - TILE * 2);
+    enemy.y = Phaser.Math.Clamp(enemy.y, TILE * 2, H - TILE * 2);
+
+    // Distance tracking
+    const distToSister = Phaser.Math.Distance.Between(sister.x, sister.y, enemy.x, enemy.y);
+    const distToBrother = Phaser.Math.Distance.Between(brother.x, brother.y, enemy.x, enemy.y);
+
+    if (distToSister < closestEnemyDist) {
+      closestEnemyDist = distToSister;
+      closestEnemyX = enemy.x;
+      closestEnemyY = enemy.y;
+    }
+
+    // Kill check
+    if (distToSister < activeConfig.ENEMY_KILL_DIST || distToBrother < activeConfig.ENEMY_KILL_DIST) {
+      triggerGameOver(currentScene);
+      return;
+    }
+
+    // Enemy visuals
+    const wobX = Math.sin(time / 250 + enemy.timer) * 8;
+    const wobY = Math.cos(time / 350 + enemy.timer) * 6;
+    enemy.sprite.setPosition(enemy.x + wobX, enemy.y + wobY);
+    const baseVis = Phaser.Math.Clamp((300 - distToSister) / 250, 0.15, 0.9);
+    enemy.sprite.setAlpha(baseVis + Math.sin(time / 400 + enemy.timer) * 0.1);
+    enemy.sprite.setScale(1.0 + Math.sin(time / 600 + enemy.timer) * 0.12);
+    enemy.sprite.setTint(
+      distToSister < 120 ? 0x331122 :
+      distToSister < 200 ? 0x1a0a1a : 0x0f0518
+    );
+
+    // Enemy shadow ripples
+    enemy.rippleTimer += dt;
+    if (enemy.rippleTimer > 0.35) {
+      enemy.rippleTimer = 0;
+      const fr2 = enemy.shadowRipples.find(r => !r.active);
+      if (fr2) {
+        fr2.active = true; fr2.life = 0;
+        fr2.setPosition(enemy.x + Phaser.Math.Between(-25, 25), enemy.y + Phaser.Math.Between(5, 20));
+      }
+    }
+    enemy.shadowRipples.forEach(rip => {
+      if (!rip.active) { rip.setAlpha(0); return; }
+      rip.life += dt * 100;
+      if (rip.life > rip.maxLife) { rip.active = false; rip.setAlpha(0); return; }
+      const p = rip.life / rip.maxLife;
+      rip.setAlpha((1 - p) * 0.7);
+      rip.setScale(0.4 + p * 1.5);
+    });
+  });
+
+  if (isGameOver) return;
+
+  // --- FEAR GAUGE ---
+  const enemyFearBonus = Math.max(0, (activeConfig.FEAR_ENEMY_RANGE - closestEnemyDist) / activeConfig.FEAR_ENEMY_RANGE) * activeConfig.FEAR_ENEMY_MAX;
+  const baseRate = brotherInLight ? activeConfig.FEAR_RATE_LIT : activeConfig.FEAR_RATE_DARK;
+  const holdBonus = isHoldingHand ? activeConfig.FEAR_HOLDING_BONUS : 0;
+  fearGauge = Phaser.Math.Clamp(fearGauge + (baseRate + enemyFearBonus + holdBonus) * dt, 0, 100);
+
+  if (fearGauge >= activeConfig.FEAR_FREEZE_THRESHOLD && !brother.fearFrozen) {
+    brother.fearFrozen = true;
+    brother.setTint(0x6666aa);
+    if (isHoldingHand) isHoldingHand = false;
+  }
+  if (fearGauge < activeConfig.FEAR_UNFREEZE_THRESHOLD && brother.fearFrozen && isHoldingHand) {
+    brother.fearFrozen = false;
+    brother.clearTint();
+  }
+
+  document.getElementById('fear-bar').style.width = fearGauge + '%';
+  document.getElementById('fear-bar').style.background = fearGauge > 70
+    ? 'linear-gradient(90deg,#aa3355,#ff2244)' : 'linear-gradient(90deg,#4466aa,#aa3355)';
+  document.getElementById('fear-value').textContent = Math.floor(fearGauge) + '%';
+  document.getElementById('brother-status').textContent =
+    brother.fearFrozen ? '😰 うずくまり中...' :
+    isHoldingHand ? '🤝 手をつないでいる' :
+    brotherInLight ? '追従中' : '⚠ 暗闇で鈍化中...';
+
+  // --- GOAL CHECK (top wall) ---
+  const midC = Math.floor(COLS / 2);
+  const goalMinC = (midC - 1) * TILE;
+  const goalMaxC = (midC + 2) * TILE;
+  const goalY = TILE; // row 0
+  const sisterAtGoal = sister.y < TILE * 2 && sister.x > goalMinC && sister.x < goalMaxC;
+  const brotherAtGoal = brother.y < TILE * 2 && brother.x > goalMinC && brother.x < goalMaxC;
+
+  if (sisterAtGoal && brotherAtGoal) {
+    triggerClear(currentScene);
+    return;
+  }
+
+  // Goal hint
+  const goalHintEl = document.getElementById('goal-hint');
+  const goalCenterX = midC * TILE + TILE / 2;
+  const goalCenterY = TILE / 2;
+  if (sisterAtGoal && !brotherAtGoal) {
+    goalHintEl.style.color = 'rgba(120,200,160,0.8)';
+    goalHintEl.textContent = '弟も出口まで連れてきて！';
+  } else {
+    const distToGoal = Phaser.Math.Distance.Between(sister.x, sister.y, goalCenterX, goalCenterY);
+    if (distToGoal < 200) {
+      goalHintEl.style.color = `rgba(120,200,160,${((200 - distToGoal) / 200) * 0.6})`;
+      goalHintEl.textContent = '↑ 出口が見える...';
+    } else {
+      goalHintEl.style.color = 'rgba(120,200,160,0)';
+    }
+  }
+
+  // --- SCREEN EFFECTS ---
+  redOverlay.setAlpha(Math.max(0, (180 - closestEnemyDist) / 180) * 0.4);
+  darkness.setAlpha(activeConfig.DARKNESS_BASE + Math.max(0, (200 - closestEnemyDist) / 200) * activeConfig.DARKNESS_ENEMY_BONUS);
+
+  // Streetlight flicker
+  streetlightGlows.forEach((gl, i) => {
+    const slZone = lightZones.find(z => z.glow === gl);
+    if (!slZone) return;
+    // Find closest enemy to this light
+    let minLD = 9999;
+    enemies.forEach(e => {
+      const ld = Phaser.Math.Distance.Between(streetlights[i].x, streetlights[i].y, e.x, e.y);
+      if (ld < minLD) minLD = ld;
+    });
+
+    // Stage 2: extra flicker
+    const flickerMod = currentStage === 2 ? (Math.random() * 0.15) : 0;
+
+    if (minLD < 140) gl.setAlpha(0.08 + Math.random() * 0.18 - flickerMod);
+    else if (minLD < 240) gl.setAlpha(slZone.baseAlpha * (0.5 + Math.random() * 0.4) - flickerMod);
+    else gl.setAlpha(slZone.baseAlpha + Math.sin(time / 500 + i) * 0.05 - flickerMod);
+  });
+
+  // Goal glow
+  goalGlows.forEach((gg, i) => {
+    gg.setAlpha(0.3 + Math.sin(time / 800 + i) * 0.1);
+  });
+
+  // Warning text (uses closest enemy)
+  const warnEl = document.getElementById('warning-text');
+  if (closestEnemyDist < activeConfig.ENEMY_WARNING_CLOSE) {
+    warnEl.textContent = '⚠ 何かが すぐ近くにいる...';
+    warnEl.style.color = '#ff3344';
+  } else if (closestEnemyDist < activeConfig.ENEMY_WARNING_MID) {
+    warnEl.textContent = '...気配を感じる';
+    warnEl.style.color = `rgba(200,100,100,${(activeConfig.ENEMY_WARNING_MID - closestEnemyDist) / 80})`;
+  } else if (closestEnemyDist < activeConfig.ENEMY_WARNING_FAR) {
+    warnEl.textContent = '...';
+    warnEl.style.color = `rgba(150,120,130,${(activeConfig.ENEMY_WARNING_FAR - closestEnemyDist) / 80 * 0.6})`;
+  } else {
+    warnEl.textContent = '';
+    warnEl.style.color = 'transparent';
+  }
+
+  // --- RAIN ---
+  rainParticles.forEach(drop => {
+    drop.y += drop.speedY * dt;
+    drop.x += drop.speedX * dt;
+    if (drop.y > H) { drop.y = Phaser.Math.Between(-20, -5); drop.x = Phaser.Math.Between(0, W); }
+    if (drop.x < -10) drop.x = W + Phaser.Math.Between(0, 30);
+
+    // Check if near any enemy
+    let nearEnemy = false;
+    enemies.forEach(e => {
+      const rd = Phaser.Math.Distance.Between(drop.x, drop.y, e.x, e.y);
+      if (rd < 90) nearEnemy = true;
+    });
+    if (nearEnemy) {
+      drop.setAlpha(0.8); drop.setTint(0x9988bb);
+      drop.x += Math.sin(time / 100 + drop.y) * 2.5;
+    } else {
+      drop.setAlpha(Phaser.Math.FloatBetween(0.2, 0.4)); drop.clearTint();
+    }
+
+    // Stage 2 wind turbulence
+    if (currentStage === 2) {
+      drop.x += Math.sin(time / 300 + drop.y * 0.01) * 1.5;
+    }
+  });
+
+  // --- WIND STREAKS (Stage 2) ---
+  windStreaks.forEach(ws => {
+    ws.life += dt * 80;
+    if (ws.life > 100) {
+      ws.life = 0;
+      ws.setPosition(W + 10, Phaser.Math.Between(0, H));
+    }
+    ws.x += activeConfig.RAIN_WIND_X * 2.5 * dt;
+    ws.y += 30 * dt;
+    const p = ws.life / 100;
+    const alpha = p < 0.3 ? p / 0.3 * 0.15 : (1 - p) / 0.7 * 0.15;
+    ws.setAlpha(alpha);
+    ws.setScale(1 + p * 0.5, 1);
+  });
+
+  // --- RIPPLES ---
+  ripples.forEach(rip => {
+    rip.timer += dt * 100;
+    if (rip.timer > 200) {
+      rip.timer = 0;
+      rip.x = Phaser.Math.Between(TILE * 2, W - TILE * 2);
+      rip.y = Phaser.Math.Between(TILE * 2, H - TILE * 2);
+      rip.setAlpha(0.4); rip.setScale(0.3);
+    }
+    if (rip.timer < 100) {
+      rip.setAlpha(0.4 * (1 - rip.timer / 100));
+      rip.setScale(0.3 + rip.timer / 100 * 0.7);
+    }
+    let nearEnemy = false;
+    enemies.forEach(e => {
+      const rd = Phaser.Math.Distance.Between(rip.x, rip.y, e.x, e.y);
+      if (rd < 100) nearEnemy = true;
+    });
+    if (nearEnemy) { rip.setTint(0x7744aa); rip.setScale(rip.scaleX * 1.4); }
+    else rip.clearTint();
+  });
+}
+</script>
+</body>
+</html>
